@@ -32,27 +32,31 @@ func (a *App) CreateTile(wp Wallpaper, onFav func()) *gtk.Box {
 		tile.AddCSSClass("tile-l")
 	}
 
+	// Жёстко фиксируем размер контейнера карточки
 	tile.SetSizeRequest(tw, th)
 	tile.SetHExpand(false)
 	tile.SetVExpand(false)
 
 	overlay := gtk.NewOverlay()
-	// ОБЯЗАТЕЛЬНО: обрезает картинку ровно по краям блока без искажений. Фиксит баг с кропом.
+	// Это закруглит края и не даст картинке вылезти за них
 	overlay.SetOverflow(gtk.OverflowHidden)
 	overlay.AddCSSClass("tile-clip") 
 
-	// Невидимая распорка
+	// === ВОЗВРАЩАЕМ РАСПОРКУ ===
+	// Именно она делает сетку красивой и строгой, заставляя элементы быть 198x352
 	strut := gtk.NewDrawingArea()
 	strut.SetSizeRequest(tw, th)
 	overlay.SetChild(strut)
 
+	// === КАРТИНКА ПОВЕРХ РАСПОРКИ ===
 	picture := gtk.NewPicture()
-	picture.SetContentFit(gtk.ContentFitCover)
-	picture.SetSizeRequest(tw, th)
+	picture.SetContentFit(gtk.ContentFitCover) // Кроп с сохранением пропорций
+	picture.SetCanShrink(true)                 // Позволяет огромным текстурам ужиматься
 	
-	// Центрируем внутри контейнера чтобы Cover делал Crop от центра
+	// ВАЖНО: заставляет картинку принять ровно форму распорки 198x352, а не свои размеры
 	picture.SetHAlign(gtk.AlignFill)
 	picture.SetVAlign(gtk.AlignFill)
+	
 	overlay.AddOverlay(picture)
 
 	// Лайк
@@ -80,7 +84,7 @@ func (a *App) CreateTile(wp Wallpaper, onFav func()) *gtk.Box {
 		overlay.AddOverlay(lbl)
 	}
 
-	// Спиннер
+	// Индикатор загрузки
 	spinner := gtk.NewSpinner()
 	spinner.SetHAlign(gtk.AlignCenter)
 	spinner.SetVAlign(gtk.AlignCenter)
@@ -89,7 +93,6 @@ func (a *App) CreateTile(wp Wallpaper, onFav func()) *gtk.Box {
 
 	tile.Append(overlay)
 
-	// Загрузка
 	actualPort := isPortrait(wp.Resolution)
 	suffix := "_thumb.jpg"
 	if actualPort { suffix = "_thumb_p.jpg" }
@@ -130,7 +133,6 @@ func (a *App) CreateTile(wp Wallpaper, onFav func()) *gtk.Box {
 		if onFav != nil { onFav() }
 	})
 
-	// Левый клик: Установить обои
 	click := gtk.NewGestureClick()
 	click.SetButton(1)
 	click.ConnectReleased(func(n int, x, y float64) {
@@ -153,21 +155,10 @@ func (a *App) CreateTile(wp Wallpaper, onFav func()) *gtk.Box {
 	})
 	overlay.AddController(click)
 
-	// Правый клик: ЗУМ (Исправлено)
 	rclick := gtk.NewGestureClick()
 	rclick.SetButton(3)
-
-	rclick.ConnectPressed(func(n int, x, y float64) {
-		a.ShowZoom(wpCopy, thumbPath)
-	})
-	
-	rclick.ConnectReleased(func(n int, x, y float64) { 
-		a.HideZoom() 
-	})
-	
-	// ВАЖНО: Мы НЕ используем ConnectStopped(hidePeek), 
-	// так как замена текстуры вызывала отмену жеста и окно зума моргало!
-
+	rclick.ConnectPressed(func(n int, x, y float64) { a.ShowZoom(wpCopy, thumbPath) })
+	rclick.ConnectReleased(func(n int, x, y float64) { a.HideZoom() })
 	overlay.AddController(rclick)
 
 	return tile
