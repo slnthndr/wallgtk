@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	APIKey          = "xi8JF5JCUKK3CUW0jXmDQ4UPdDHGrDT5"
+	APIKey          = "" //get your apiKey on https://wallhaven.cc/settings/account
 	APIBase         = "https://wallhaven.cc/api/v1/search"
 	TileSpacing     = 8
 	ScrollThreshold = 600
