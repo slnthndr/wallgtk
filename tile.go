@@ -38,22 +38,20 @@ func (a *App) CreateTile(wp Wallpaper, onFav func()) *gtk.Box {
 	tile.SetVExpand(false)
 
 	overlay := gtk.NewOverlay()
-	// Это закруглит края и не даст картинке вылезти за них
+	// Это закруглит края
 	overlay.SetOverflow(gtk.OverflowHidden)
 	overlay.AddCSSClass("tile-clip") 
 
-	// === ВОЗВРАЩАЕМ РАСПОРКУ ===
-	// Именно она делает сетку красивой и строгой, заставляя элементы быть 198x352
+	// Распорка
 	strut := gtk.NewDrawingArea()
 	strut.SetSizeRequest(tw, th)
 	overlay.SetChild(strut)
 
 	// === КАРТИНКА ПОВЕРХ РАСПОРКИ ===
 	picture := gtk.NewPicture()
-	picture.SetContentFit(gtk.ContentFitCover) // Кроп с сохранением пропорций
-	picture.SetCanShrink(true)                 // Позволяет огромным текстурам ужиматься
-	
-	// ВАЖНО: заставляет картинку принять ровно форму распорки 198x352, а не свои размеры
+	// Contain - уменьшит обои так, чтобы они влезли ЦЕЛИКОМ без кропа!
+	picture.SetContentFit(gtk.ContentFitCover) 
+	picture.SetCanShrink(true)                 
 	picture.SetHAlign(gtk.AlignFill)
 	picture.SetVAlign(gtk.AlignFill)
 	
@@ -108,9 +106,11 @@ func (a *App) CreateTile(wp Wallpaper, onFav func()) *gtk.Box {
 	loadThumb()
 
 	if wp.Thumbs != nil {
-		url := wp.Thumbs.Large
-		if url == "" { url = wp.Thumbs.Original }
+		// Берём сначала Original, чтобы миниатюра точно не была обрезана самим сайтом
+		url := wp.Thumbs.Original
+		if url == "" { url = wp.Thumbs.Large }
 		if url == "" { url = wp.Thumbs.Small }
+		
 		if url != "" && picture.Paintable() == nil {
 			go func(u, p string) {
 				if download(u, p) {
