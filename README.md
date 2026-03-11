@@ -1,60 +1,60 @@
 # WallGTK
 
-WallGTK — GTK4-приложение на Go для поиска, просмотра и установки обоев с сайта Wallhaven.
+WallGTK is a GTK4 desktop application written in Go for searching, previewing and setting wallpapers from Wallhaven.
 
-Приложение позволяет устанавливать обои на конкретный монитор, сохранять избранные изображения и быстро просматривать их в полноэкранном режиме.
+It supports multi-monitor setup, favorites management, fullscreen zoom preview and automatic wallpaper downloading.
 
 ---
 
-## Возможности
+## Features
 
-### Поиск и просмотр
+### Search and browsing
 
-* загрузка обоев через Wallhaven API
-* поиск по тексту
-* фильтрация по:
+* Search wallpapers using Wallhaven API
+* Filter by:
 
-  * соотношению сторон
-  * минимальному разрешению
-  * способу сортировки
-* автоматическая подгрузка новых страниц при прокрутке (infinite scroll)
+  * text query
+  * aspect ratio
+  * minimum resolution
+  * sorting method
+* Infinite scrolling (automatic page loading)
 
-### Установка обоев
+### Wallpaper setting
 
-* установка по **левому клику**
-* поддержка выбора монитора
-* плавная анимация установки через `swww`
+* Set wallpaper with **left mouse click**
+* Select target monitor
+* Smooth animated transitions using `swww`
 
-### Избранные
+### Favorites
 
-* добавление/удаление через кнопку ❤️
-* вкладка **Избранное**
-* список избранных сохраняется в:
+* Add / remove wallpapers using ❤️ button
+* Favorites tab for quick access
+* Favorites list is stored in:
 
 ```
 ~/.cache/wallgtk/favorites.json
 ```
 
-* при добавлении в избранное изображение автоматически скачивается в:
+* When adding to favorites the image is automatically downloaded to:
 
 ```
 ~/Wallpapers/backgrounds/hor
 ~/Wallpapers/backgrounds/vert
 ```
 
-(горизонтальные и вертикальные обои сохраняются отдельно)
+(Horizontal and vertical wallpapers are stored separately)
 
-### Zoom-просмотр
+### Zoom preview
 
-* удержание **правой кнопки мыши** открывает fullscreen preview
-* сначала показывается миниатюра
-* затем асинхронно загружается оригинал
-* отображаются теги обоев
-* zoom закрывается при отпускании ПКМ
+* Hold **right mouse button** to open fullscreen preview
+* Low-resolution thumbnail is shown first
+* Full image loads asynchronously
+* Wallpaper tags are displayed
+* Zoom closes when RMB is released
 
-### Кэширование
+### Caching
 
-Все изображения и миниатюры сохраняются в:
+All thumbnails and images are stored in:
 
 ```
 ~/.cache/wallgtk
@@ -62,28 +62,28 @@ WallGTK — GTK4-приложение на Go для поиска, просмо�
 
 ---
 
-## Выбор монитора
+## Monitor selection
 
-В приложении можно выбрать:
+The application allows selecting:
 
-* Все
-* Основной монитор
-* Второй монитор
+* All monitors
+* Primary monitor
+* Secondary monitor
 
-### ВАЖНО
+### IMPORTANT
 
-Названия выходов мониторов заданы в коде (`config.go`):
+Monitor output names are hardcoded in `config.go`:
 
 ```go
 MonitorOutputs = map[string]string{
-    "Основной монитор": "DP-2",
-    "Второй монитор":   "DP-1",
+    "Primary monitor":   "DP-2",
+    "Secondary monitor": "DP-1",
 }
 ```
 
-Эти значения нужно изменить под свою систему.
+You must change these values to match your system.
 
-### Как узнать название выхода
+### How to get monitor output names
 
 Wayland:
 
@@ -91,7 +91,7 @@ Wayland:
 hyprctl monitors
 ```
 
-или
+or
 
 ```
 swww query
@@ -103,7 +103,7 @@ X11:
 xrandr
 ```
 
-После изменения требуется пересборка:
+After changing monitor outputs you must rebuild the application:
 
 ```
 make install
@@ -111,21 +111,21 @@ make install
 
 ---
 
-## Требования
+## Requirements
 
 ### Go
 
-Минимум:
+Minimum version:
 
 ```
 Go 1.21+
 ```
 
-Установка: https://go.dev/doc/install
+Install: https://go.dev/doc/install
 
 ### GTK4
 
-Arch:
+Arch Linux:
 
 ```
 sudo pacman -S gtk4
@@ -137,9 +137,11 @@ Ubuntu / Debian:
 sudo apt install libgtk-4-dev
 ```
 
+GTK documentation: https://docs.gtk.org/
+
 ### swww
 
-Используется для установки обоев.
+Used for setting wallpapers.
 
 Arch:
 
@@ -149,7 +151,7 @@ sudo pacman -S swww
 
 ---
 
-## Установка
+## Installation
 
 ```
 git clone https://github.com/slnthndr/wallgtk.git
@@ -157,13 +159,13 @@ cd wallgtk
 make install
 ```
 
-Бинарник установится в:
+Binary will be installed to:
 
 ```
 /usr/local/bin/wallgtk
 ```
 
-Запуск:
+Run:
 
 ```
 wallgtk
@@ -171,7 +173,7 @@ wallgtk
 
 ---
 
-## Удаление
+## Uninstall
 
 ```
 make uninstall
@@ -179,7 +181,7 @@ make uninstall
 
 ---
 
-## Быстрый запуск без установки
+## Run without installation
 
 ```
 go run .
@@ -187,31 +189,31 @@ go run .
 
 ---
 
-## Управление
+## Controls
 
-* ЛКМ — установить обои
-* ПКМ (удерживать) — zoom
-* ❤️ — добавить / удалить из избранного
-* прокрутка вниз — загрузка новых обоев
-
----
-
-## Конфигурация
-
-Основные настройки находятся в `config.go`:
-
-* API ключ Wallhaven
-* список мониторов
-* разрешения
-* соотношения сторон
-* размеры плиток
-* директории хранения
-
-После изменения требуется пересборка.
+* Left click — set wallpaper
+* Hold right click — zoom preview
+* ❤️ — add / remove favorite
+* Scroll down — load more wallpapers
 
 ---
 
-## Лицензия
+## Configuration
+
+Main settings are located in `config.go`:
+
+* Wallhaven API key
+* Monitor outputs
+* Supported resolutions
+* Aspect ratios
+* Tile sizes
+* Cache directories
+
+Rebuild is required after changing configuration.
+
+---
+
+## License
 
 GNU General Public License v3.
 
