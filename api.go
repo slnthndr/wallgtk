@@ -39,7 +39,7 @@ func fetchPage(query, sorting, ratio, atleast string, page int) ([]Wallpaper, in
 		url += "&q=" + query
 	}
 
-	fmt.Println("[СЕТЬ] Ищу обои:", url)
+	fmt.Println("[NETWORK] Searching:", url)
 	resp, err := httpClient.Get(url)
 	if err != nil { return nil, 0 }
 	defer resp.Body.Close()

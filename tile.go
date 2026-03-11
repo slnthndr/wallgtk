@@ -32,24 +32,19 @@ func (a *App) CreateTile(wp Wallpaper, onFav func()) *gtk.Box {
 		tile.AddCSSClass("tile-l")
 	}
 
-	// Жёстко фиксируем размер контейнера карточки
 	tile.SetSizeRequest(tw, th)
 	tile.SetHExpand(false)
 	tile.SetVExpand(false)
 
 	overlay := gtk.NewOverlay()
-	// Это закруглит края
 	overlay.SetOverflow(gtk.OverflowHidden)
 	overlay.AddCSSClass("tile-clip") 
 
-	// Распорка
 	strut := gtk.NewDrawingArea()
 	strut.SetSizeRequest(tw, th)
 	overlay.SetChild(strut)
 
-	// === КАРТИНКА ПОВЕРХ РАСПОРКИ ===
 	picture := gtk.NewPicture()
-	// Contain - уменьшит обои так, чтобы они влезли ЦЕЛИКОМ без кропа!
 	picture.SetContentFit(gtk.ContentFitCover) 
 	picture.SetCanShrink(true)                 
 	picture.SetHAlign(gtk.AlignFill)
@@ -57,7 +52,6 @@ func (a *App) CreateTile(wp Wallpaper, onFav func()) *gtk.Box {
 	
 	overlay.AddOverlay(picture)
 
-	// Лайк
 	heart := gtk.NewButton()
 	heart.AddCSSClass("heart-btn")
 	heart.SetVAlign(gtk.AlignEnd)
@@ -71,7 +65,6 @@ func (a *App) CreateTile(wp Wallpaper, onFav func()) *gtk.Box {
 	if isFav { heart.SetLabel("❤️") } else { heart.SetLabel("🤍") }
 	overlay.AddOverlay(heart)
 
-	// Разрешение
 	if wp.Resolution != "" {
 		lbl := gtk.NewLabel(wp.Resolution)
 		lbl.AddCSSClass("res-label")
@@ -82,7 +75,6 @@ func (a *App) CreateTile(wp Wallpaper, onFav func()) *gtk.Box {
 		overlay.AddOverlay(lbl)
 	}
 
-	// Индикатор загрузки
 	spinner := gtk.NewSpinner()
 	spinner.SetHAlign(gtk.AlignCenter)
 	spinner.SetVAlign(gtk.AlignCenter)
@@ -106,7 +98,6 @@ func (a *App) CreateTile(wp Wallpaper, onFav func()) *gtk.Box {
 	loadThumb()
 
 	if wp.Thumbs != nil {
-		// Берём сначала Original, чтобы миниатюра точно не была обрезана самим сайтом
 		url := wp.Thumbs.Original
 		if url == "" { url = wp.Thumbs.Large }
 		if url == "" { url = wp.Thumbs.Small }

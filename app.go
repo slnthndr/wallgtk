@@ -12,14 +12,16 @@ type App struct {
 	FavFlow      *gtk.FlowBox
 	Stack        *gtk.Stack
 	
-	// ВАЖНО: Сохраняем доступ к скроллу
 	BrowseScroll *gtk.ScrolledWindow 
+	FavScroll    *gtk.ScrolledWindow // Ссылка для локализации Stack
 
 	MonDD       *gtk.DropDown
 	RatioDD     *gtk.DropDown
 	ResDD       *gtk.DropDown
 	SortDD      *gtk.DropDown
 	SearchEntry *gtk.SearchEntry
+	MonLabel    *gtk.Label  // Ссылка для локализации
+	LangBtn     *gtk.Button // Кнопка переключения языка
 
 	// Zoom State
 	PeekBox       *gtk.Box
@@ -54,30 +56,48 @@ func NewApp(app *gtk.Application) *App {
 	return a
 }
 
+func (a *App) getLocalizedList(keys []string) []string {
+	var list []string
+	for _, k := range keys {
+		list = append(list, Tr(k))
+	}
+	return list
+}
+
 func (a *App) BuildUI() {
 	header := gtk.NewHeaderBar()
 
-	a.MonDD = gtk.NewDropDownFromStrings(MonitorNames)
+	a.MonDD = gtk.NewDropDownFromStrings(a.getLocalizedList(MonitorKeys))
 	a.MonDD.SetSelected(1)
 	
+	a.MonLabel = gtk.NewLabel(Tr("monitor_lbl"))
 	monBox := gtk.NewBox(gtk.OrientationHorizontal, 4)
-	monBox.Append(gtk.NewLabel("Монитор:"))
+	monBox.Append(a.MonLabel)
 	monBox.Append(a.MonDD)
 	header.PackStart(monBox)
 
 	a.SearchEntry = gtk.NewSearchEntry()
-	a.SearchEntry.SetPlaceholderText("Поиск...")
+	a.SearchEntry.SetPlaceholderText(Tr("search_placeholder"))
 	a.SearchEntry.SetHExpand(true)
 	header.PackStart(a.SearchEntry)
 
-	a.SortDD = gtk.NewDropDownFromStrings(SortOptions)
+	// Кнопка языка
+	a.LangBtn = gtk.NewButtonWithLabel(string(CurrentLang))
+	a.LangBtn.ConnectClicked(func() {
+		ToggleLang()
+		a.LangBtn.SetLabel(string(CurrentLang))
+		a.UpdateLanguageUI()
+	})
+	header.PackEnd(a.LangBtn)
+
+	a.SortDD = gtk.NewDropDownFromStrings(a.getLocalizedList(SortKeys))
 	a.SortDD.SetSelected(0)
 	header.PackEnd(a.SortDD)
 
-	a.ResDD = gtk.NewDropDownFromStrings(LandscapeResNames)
+	a.ResDD = gtk.NewDropDownFromStrings(a.getLocalizedList(LandscapeResKeys))
 	header.PackEnd(a.ResDD)
 
-	a.RatioDD = gtk.NewDropDownFromStrings(LandscapeRatiosNames)
+	a.RatioDD = gtk.NewDropDownFromStrings(a.getLocalizedList(LandscapeRatiosKeys))
 	header.PackEnd(a.RatioDD)
 
 	a.Win.SetTitlebar(header)
@@ -85,7 +105,7 @@ func (a *App) BuildUI() {
 	a.BrowseFlow = gtk.NewFlowBox()
 	a.configureFlowBox(a.BrowseFlow)
 
-	a.BrowseScroll = gtk.NewScrolledWindow() // Сохранено в структуру
+	a.BrowseScroll = gtk.NewScrolledWindow()
 	a.BrowseScroll.SetVExpand(true)
 	a.BrowseScroll.SetHExpand(true)
 	a.BrowseScroll.SetChild(a.BrowseFlow)
@@ -93,15 +113,15 @@ func (a *App) BuildUI() {
 	a.FavFlow = gtk.NewFlowBox()
 	a.configureFlowBox(a.FavFlow)
 
-	favScroll := gtk.NewScrolledWindow()
-	favScroll.SetVExpand(true)
-	favScroll.SetHExpand(true)
-	favScroll.SetChild(a.FavFlow)
+	a.FavScroll = gtk.NewScrolledWindow()
+	a.FavScroll.SetVExpand(true)
+	a.FavScroll.SetHExpand(true)
+	a.FavScroll.SetChild(a.FavFlow)
 
 	a.Stack = gtk.NewStack()
 	a.Stack.SetTransitionType(gtk.StackTransitionTypeSlideLeftRight)
-	a.Stack.AddTitled(a.BrowseScroll, "browse", "Просмотр")
-	a.Stack.AddTitled(favScroll, "favs", "Избранное")
+	a.Stack.AddTitled(a.BrowseScroll, "browse", Tr("tab_browse"))
+	a.Stack.AddTitled(a.FavScroll, "favs", Tr("tab_favs"))
 
 	switcher := gtk.NewStackSwitcher()
 	switcher.SetStack(a.Stack)
@@ -118,6 +138,35 @@ func (a *App) BuildUI() {
 	mainOverlay.AddOverlay(a.BuildZoomOverlay())
 
 	a.Win.SetChild(mainOverlay)
+}
+
+func (a *App) UpdateLanguageUI() {
+	a.MonLabel.SetText(Tr("monitor_lbl"))
+	a.SearchEntry.SetPlaceholderText(Tr("search_placeholder"))
+
+	if page := a.Stack.Page(a.BrowseScroll); page != nil {
+		page.SetTitle(Tr("tab_browse"))
+	}
+	if page := a.Stack.Page(a.FavScroll); page != nil {
+		page.SetTitle(Tr("tab_favs"))
+	}
+
+	updateDD := func(dd *gtk.DropDown, keys []string) {
+		idx := dd.Selected()
+		dd.SetModel(gtk.NewStringList(a.getLocalizedList(keys)))
+		dd.SetSelected(idx)
+	}
+
+	updateDD(a.MonDD, MonitorKeys)
+	updateDD(a.SortDD, SortKeys)
+
+	if a.MonDD.Selected() == 2 {
+		updateDD(a.RatioDD, PortraitRatiosKeys)
+		updateDD(a.ResDD, PortraitResKeys)
+	} else {
+		updateDD(a.RatioDD, LandscapeRatiosKeys)
+		updateDD(a.ResDD, LandscapeResKeys)
+	}
 }
 
 func (a *App) configureFlowBox(flow *gtk.FlowBox) {
@@ -148,16 +197,11 @@ func (a *App) SetupEvents() {
 			a.Lock.Unlock()
 
 			if canLoad && a.Stack.VisibleChildName() == "browse" {
-				// === УМНАЯ ПРОВЕРКА РАСТЯГИВАНИЯ ОКНА ===
 				vadj := a.BrowseScroll.VAdjustment()
 				upper := vadj.Upper()
 				pageSize := vadj.PageSize()
 				value := vadj.Value()
 
-				// Три сценария:
-				// 1. Совсем пусто (FirstChild == nil)
-				// 2. Размер контента меньше или равен размеру окна (upper <= pageSize + запас) - актуально при растягивании окна!
-				// 3. Мы докрутили скролл почти до конца экрана
 				if a.BrowseFlow.FirstChild() == nil || 
 				   (upper > 0 && pageSize > 0 && upper <= pageSize+1200) ||
 				   (upper > 0 && (value+pageSize) >= (upper-800)) {
@@ -169,11 +213,11 @@ func (a *App) SetupEvents() {
 		if a.MonDD.Selected() != lastMon {
 			lastMon = a.MonDD.Selected()
 			if lastMon == 2 {
-				a.RatioDD.SetModel(gtk.NewStringList(PortraitRatiosNames))
-				a.ResDD.SetModel(gtk.NewStringList(PortraitResNames))
+				a.RatioDD.SetModel(gtk.NewStringList(a.getLocalizedList(PortraitRatiosKeys)))
+				a.ResDD.SetModel(gtk.NewStringList(a.getLocalizedList(PortraitResKeys)))
 			} else {
-				a.RatioDD.SetModel(gtk.NewStringList(LandscapeRatiosNames))
-				a.ResDD.SetModel(gtk.NewStringList(LandscapeResNames))
+				a.RatioDD.SetModel(gtk.NewStringList(a.getLocalizedList(LandscapeRatiosKeys)))
+				a.ResDD.SetModel(gtk.NewStringList(a.getLocalizedList(LandscapeResKeys)))
 			}
 			a.RatioDD.SetSelected(0)
 			a.ResDD.SetSelected(0)
@@ -294,8 +338,8 @@ func (a *App) RefreshFavs() {
 
 func (a *App) GetSelectedMonitor() string {
 	idx := a.MonDD.Selected()
-	if int(idx) < len(MonitorNames) { return MonitorNames[idx] }
-	return "Все"
+	if int(idx) < len(MonitorKeys) { return MonitorKeys[idx] } // Возвращаем ключ
+	return "mon_all"
 }
 
 func (a *App) Show() {

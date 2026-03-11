@@ -21,22 +21,25 @@ const (
 )
 
 var (
-	MonitorNames = []string{"Все", "Основной монитор", "Второй монитор"}
-	SortOptions  = []string{"date_added", "relevance", "random", "views", "favorites", "toplist"}
+	// НОВЫЕ ПЕРЕМЕННЫЕ ДЛЯ ЛОКАЛИЗАЦИИ
+	MonitorKeys = []string{"mon_all", "mon_pri", "mon_sec"}
+	SortKeys    = []string{"sort_date", "sort_rel", "sort_rnd", "sort_view", "sort_fav", "sort_top"}
+	SortOptions = []string{"date_added", "relevance", "random", "views", "favorites", "toplist"}
 
-	LandscapeRatios      = []string{"landscape", "16x9", "16x10", "21x9"}
-	LandscapeRatiosNames = []string{"Широкие (Любые)", "16:9", "16:10", "21:9"}
-	LandscapeRes         = []string{"2560x1440", "1920x1080", "3840x2160"}
-	LandscapeResNames    = []string{">= 2K (1440p)", ">= Full HD (1080p)", ">= 4K (2160p)"}
+	LandscapeRatios     = []string{"landscape", "16x9", "16x10", "21x9"}
+	LandscapeRatiosKeys = []string{"ratio_any_l", "16:9", "16:10", "21:9"}
+	LandscapeRes        = []string{"2560x1440", "1920x1080", "3840x2160"}
+	LandscapeResKeys    = []string{"res_2k", "res_fhd", "res_4k"}
 
-	PortraitRatios      = []string{"portrait", "9x16", "10x16"}
-	PortraitRatiosNames = []string{"Вертикальные (Любые)", "9:16", "10:16"}
-	PortraitRes         = []string{"1440x2560", "1080x1920", "2160x3840"}
-	PortraitResNames    = []string{">= 2K (1440p)", ">= Full HD (1080p)", ">= 4K (2160p)"}
+	PortraitRatios     = []string{"portrait", "9x16", "10x16"}
+	PortraitRatiosKeys = []string{"ratio_any_p", "9:16", "10:16"}
+	PortraitRes        = []string{"1440x2560", "1080x1920", "2160x3840"}
+	PortraitResKeys    = []string{"res_2k", "res_fhd", "res_4k"}
 
+	// Важно: Теперь используются внутренние ключи вместо локализованного текста
 	MonitorOutputs = map[string]string{
-		"Основной монитор": "DP-2",
-		"Второй монитор":   "DP-1",
+		"mon_pri": "DP-2",
+		"mon_sec": "DP-1",
 	}
 
 	cacheDir      string

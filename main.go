@@ -9,6 +9,7 @@ import (
 
 func main() {
 	initDirs()
+	InitI18n() // Инициализируем локализацию
 
 	// Отключаем Vulkan, чтобы NVIDIA-драйвер перестал спамить в консоль
 	os.Setenv("GSK_RENDERER", "gl")
@@ -26,7 +27,7 @@ func setupCSS() {
 	css := `
 		.tile-l { min-width: 384px; min-height: 216px; }
 		.tile-p { min-width: 198px; min-height: 352px; }
-		.tile-clip { border-radius: 8px; background-color: rgba(30, 30, 40, 0.5); } /* ВАЖНО для правильного кропа! */
+		.tile-clip { border-radius: 8px; background-color: rgba(30, 30, 40, 0.5); }
 		.heart-btn { background: rgba(20,20,30,0.65); color: #ff4d4d; border-radius: 50%; min-width: 34px; min-height: 34px; font-size: 18px; padding: 0; border: none; }
 		.heart-btn:hover { background: rgba(255,80,80,0.9); color: white; }
 		.res-label { background: rgba(0,0,0,0.6); color: white; border-radius: 8px; padding: 2px 8px; font-size: 11px; }
@@ -47,4 +48,3 @@ func setupCSS() {
 		gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
 	)
 }
-
