@@ -1,3 +1,41 @@
+## Installation
+
+```
+git clone https://github.com/slnthndr/wallgtk.git
+cd wallgtk
+make install
+```
+
+Binary will be installed to:
+
+```
+/usr/local/bin/wallgtk
+```
+
+Run:
+
+```
+wallgtk
+```
+
+---
+
+## Uninstall
+
+```
+make uninstall
+```
+
+---
+
+## Run without installation
+
+```
+go run .
+```
+
+---
+
 # WallGTK
 
 WallGTK is a GTK4 desktop application written in Go for searching, previewing and setting wallpapers from Wallhaven.
@@ -147,44 +185,6 @@ Arch:
 
 ```
 sudo pacman -S swww
-```
-
----
-
-## Installation
-
-```
-git clone https://github.com/slnthndr/wallgtk.git
-cd wallgtk
-make install
-```
-
-Binary will be installed to:
-
-```
-/usr/local/bin/wallgtk
-```
-
-Run:
-
-```
-wallgtk
-```
-
----
-
-## Uninstall
-
-```
-make uninstall
-```
-
----
-
-## Run without installation
-
-```
-go run .
 ```
 
 ---
