@@ -41,13 +41,19 @@ func fetchPage(query, sorting, ratio, atleast string, page int) ([]Wallpaper, in
 
 	fmt.Println("[NETWORK] Searching:", url)
 	resp, err := httpClient.Get(url)
-	if err != nil { return nil, 0 }
+	if err != nil {
+		return nil, 0
+	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 { return nil, 0 }
+	if resp.StatusCode != 200 {
+		return nil, 0
+	}
 
 	var r APIResponse
-	if err := json.NewDecoder(resp.Body).Decode(&r); err != nil { return nil, 0 }
+	if err := json.NewDecoder(resp.Body).Decode(&r); err != nil {
+		return nil, 0
+	}
 
 	lastPage := 1
 	if r.Meta != nil {
@@ -62,7 +68,9 @@ func fetchTags(id string) []string {
 		url += "?apikey=" + APIKey
 	}
 	resp, err := httpClient.Get(url)
-	if err != nil || resp.StatusCode != 200 { return nil }
+	if err != nil || resp.StatusCode != 200 {
+		return nil
+	}
 	defer resp.Body.Close()
 
 	var r struct {
@@ -72,7 +80,9 @@ func fetchTags(id string) []string {
 			} `json:"tags"`
 		} `json:"data"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&r); err != nil { return nil }
+	if err := json.NewDecoder(resp.Body).Decode(&r); err != nil {
+		return nil
+	}
 
 	var tags []string
 	for _, t := range r.Data.Tags {

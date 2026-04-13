@@ -17,7 +17,7 @@ const (
 	LandH = 216
 	PortW = 198 // Увеличенный размер для вертикальных обоев
 	PortH = 352
-	Gap   = 4   // Минимальный зазор между плитками
+	Gap   = 4 // Минимальный зазор между плитками
 )
 
 var (
@@ -47,6 +47,7 @@ var (
 	wallpaperHor  string
 	wallpaperVert string
 	favorites     = make(map[string]Wallpaper)
+	pendingFavs   = make(map[string]Wallpaper)
 	favMutex      sync.RWMutex
 	httpClient    = &http.Client{Timeout: 30 * time.Second}
 )

@@ -1,8 +1,11 @@
 package main
 
 import (
-	"path/filepath"
+	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
+
 	"github.com/diamondburned/gotk4/pkg/gdk/v4"
 	"github.com/diamondburned/gotk4/pkg/glib/v2"
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
@@ -17,9 +20,9 @@ func (a *App) CreateTile(wp Wallpaper, onFav func()) *gtk.Box {
 	isPort := false
 
 	if monIdx == 2 {
-		isPort = true 
+		isPort = true
 	} else if monIdx == 1 {
-		isPort = false 
+		isPort = false
 	} else {
 		isPort = isPortrait(wp.Resolution)
 	}
@@ -38,18 +41,18 @@ func (a *App) CreateTile(wp Wallpaper, onFav func()) *gtk.Box {
 
 	overlay := gtk.NewOverlay()
 	overlay.SetOverflow(gtk.OverflowHidden)
-	overlay.AddCSSClass("tile-clip") 
+	overlay.AddCSSClass("tile-clip")
 
 	strut := gtk.NewDrawingArea()
 	strut.SetSizeRequest(tw, th)
 	overlay.SetChild(strut)
 
 	picture := gtk.NewPicture()
-	picture.SetContentFit(gtk.ContentFitCover) 
-	picture.SetCanShrink(true)                 
+	picture.SetContentFit(gtk.ContentFitCover)
+	picture.SetCanShrink(true)
 	picture.SetHAlign(gtk.AlignFill)
 	picture.SetVAlign(gtk.AlignFill)
-	
+
 	overlay.AddOverlay(picture)
 
 	heart := gtk.NewButton()
@@ -62,10 +65,14 @@ func (a *App) CreateTile(wp Wallpaper, onFav func()) *gtk.Box {
 	favMutex.RLock()
 	_, isFav := favorites[wp.ID]
 	favMutex.RUnlock()
-	if isFav { heart.SetLabel("❤️") } else { heart.SetLabel("🤍") }
+	if isFav {
+		heart.SetLabel("❤️")
+	} else {
+		heart.SetLabel("🤍")
+	}
 	overlay.AddOverlay(heart)
 
-	if wp.Resolution != "" {
+	if wp.Resolution != "" && !strings.HasPrefix(wp.Path, "/home") {
 		lbl := gtk.NewLabel(wp.Resolution)
 		lbl.AddCSSClass("res-label")
 		lbl.SetHAlign(gtk.AlignStart)
@@ -85,33 +92,53 @@ func (a *App) CreateTile(wp Wallpaper, onFav func()) *gtk.Box {
 
 	actualPort := isPortrait(wp.Resolution)
 	suffix := "_thumb.jpg"
-	if actualPort { suffix = "_thumb_p.jpg" }
+	if actualPort {
+		suffix = "_thumb_p.jpg"
+	}
 	thumbPath := filepath.Join(cacheDir, wp.ID+suffix)
 
-	loadThumb := func() {
-		if _, err := os.Stat(thumbPath); err == nil {
-			if tex, err := gdk.NewTextureFromFilename(thumbPath); err == nil {
+	loadThumb := func(path string) {
+		if _, err := os.Stat(path); err == nil {
+			if tex, err := gdk.NewTextureFromFilename(path); err == nil {
 				picture.SetPaintable(tex)
 			}
 		}
 	}
-	loadThumb()
 
-	if wp.Thumbs != nil {
-		url := wp.Thumbs.Original
-		if url == "" { url = wp.Thumbs.Large }
-		if url == "" { url = wp.Thumbs.Small }
-		
-		if url != "" && picture.Paintable() == nil {
-			go func(u, p string) {
-				if download(u, p) {
-					glib.IdleAdd(func() bool {
-						loadThumb()
-						return false
-					})
-				}
-			}(url, thumbPath)
+	// 1. Пытаемся грузить кэш из сети
+	if _, err := os.Stat(thumbPath); err == nil {
+		loadThumb(thumbPath)
+	} else {
+		// 2. Если кэша нет, но wp.Path указывает на локальный файл на диске,
+		// то используем сам файл как миниатюру
+		if !strings.HasPrefix(wp.Path, "http") {
+			loadThumb(wp.Path)
 		}
+	}
+
+	// Для загрузки из сети:
+	url := ""
+	if wp.Thumbs != nil {
+		url = wp.Thumbs.Original
+		if url == "" {
+			url = wp.Thumbs.Large
+		}
+		if url == "" {
+			url = wp.Thumbs.Small
+		}
+	} else if strings.HasPrefix(wp.Path, "http") && len(wp.ID) > 2 {
+		url = fmt.Sprintf("https://th.wallhaven.cc/small/%s/%s.jpg", wp.ID[:2], wp.ID)
+	}
+
+	if url != "" && picture.Paintable() == nil {
+		go func(u, p string) {
+			if download(u, p) {
+				glib.IdleAdd(func() bool {
+					loadThumb(p)
+					return false
+				})
+			}
+		}(url, thumbPath)
 	}
 
 	wpCopy := wp
@@ -121,7 +148,9 @@ func (a *App) CreateTile(wp Wallpaper, onFav func()) *gtk.Box {
 		} else {
 			heart.SetLabel("🤍")
 		}
-		if onFav != nil { onFav() }
+		if onFav != nil {
+			onFav()
+		}
 	})
 
 	click := gtk.NewGestureClick()
@@ -131,11 +160,35 @@ func (a *App) CreateTile(wp Wallpaper, onFav func()) *gtk.Box {
 		spinner.SetVisible(true)
 		spinner.Start()
 		picture.AddCSSClass("loading")
+
 		go func() {
-			p := filepath.Join(cacheDir, wpCopy.ID+".jpg")
-			if download(wpCopy.Path, p) {
-				setWallpaper(p, mon)
+			finalPath := wpCopy.Path
+			// Качаем обоину в кеш, ТОЛЬКО ЕСЛИ она из сети
+			if strings.HasPrefix(finalPath, "http") {
+				p := filepath.Join(cacheDir, wpCopy.ID+".jpg")
+				if !download(wpCopy.Path, p) {
+					glib.IdleAdd(func() bool {
+						spinner.Stop()
+						spinner.SetVisible(false)
+						picture.RemoveCSSClass("loading")
+						return false
+					})
+					return
+				}
+				finalPath = p
+			} else if _, err := os.Stat(finalPath); err != nil {
+				glib.IdleAdd(func() bool {
+					spinner.Stop()
+					spinner.SetVisible(false)
+					picture.RemoveCSSClass("loading")
+					return false
+				})
+				return
 			}
+
+			// Вызываем Swww с локальным путем
+			setWallpaper(finalPath, mon)
+
 			glib.IdleAdd(func() bool {
 				spinner.Stop()
 				spinner.SetVisible(false)

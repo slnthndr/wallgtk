@@ -317,19 +317,25 @@ func (a *App) RefreshFavsListener() {
 }
 
 func (a *App) RefreshFavs() {
+	SyncFavorites() // Сверяемся с тем, какие файлы сейчас реально лежат на диске
+
 	for child := a.FavFlow.FirstChild(); child != nil; child = a.FavFlow.FirstChild() {
 		a.FavFlow.Remove(child)
 	}
 
 	idx := a.MonDD.Selected()
-	showLandscape := (idx == 0 || idx == 1)
-	showPortrait := (idx == 0 || idx == 2)
+	showLandscape := (idx == 0 || idx == 1) // Индекс 1 = Основной монитор (hor)
+	showPortrait := (idx == 0 || idx == 2)  // Индекс 2 = Второй монитор (vert)
 
 	favMutex.RLock()
 	for _, wp := range favorites {
 		isPort := isPortrait(wp.Resolution)
-		if isPort && !showPortrait { continue }
-		if !isPort && !showLandscape { continue }
+		if isPort && !showPortrait {
+			continue
+		}
+		if !isPort && !showLandscape {
+			continue
+		}
 		tile := a.CreateTile(wp, nil)
 		a.FavFlow.Append(tile)
 	}
