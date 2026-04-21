@@ -5,35 +5,64 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
-	"time"
+	"strings"
 )
 
 func download(url, dest string) bool {
+	downloadMu.Lock()
+	if state, exists := activeDownloads[dest]; exists {
+		downloadMu.Unlock()
+		return <-state.done
+	}
+	state := &downloadState{done: make(chan bool, 1)}
+	activeDownloads[dest] = state
+	downloadMu.Unlock()
+
+	ok := downloadWithRetry(url, dest, 3)
+
+	downloadMu.Lock()
+	delete(activeDownloads, dest)
+	downloadMu.Unlock()
+	state.done <- ok
+	close(state.done)
+	return ok
+}
+
+func downloadWithRetry(url, dest string, attempts int) bool {
 	if _, err := os.Stat(dest); err == nil {
 		return true
 	}
-	resp, err := httpClient.Get(url)
-	if err != nil || resp.StatusCode != 200 {
-		return false
-	}
-	defer resp.Body.Close()
+	for attempt := 0; attempt < attempts; attempt++ {
+		resp, err := httpClient.Get(url)
+		if err != nil || resp.StatusCode != 200 {
+			if resp != nil && resp.Body != nil {
+				resp.Body.Close()
+			}
+			continue
+		}
 
-	f, err := os.Create(dest + ".tmp")
-	if err != nil {
-		return false
+		f, err := os.Create(dest + ".tmp")
+		if err != nil {
+			resp.Body.Close()
+			return false
+		}
+		_, copyErr := io.Copy(f, resp.Body)
+		resp.Body.Close()
+		closeErr := f.Close()
+		if copyErr == nil && closeErr == nil && os.Rename(dest+".tmp", dest) == nil {
+			return true
+		}
+		os.Remove(dest + ".tmp")
 	}
-	io.Copy(f, resp.Body)
-	f.Close()
-	return os.Rename(dest+".tmp", dest) == nil
+	return false
 }
 
-func fetchPage(query, sorting, ratio, atleast string, page int) ([]Wallpaper, int) {
-	url := fmt.Sprintf("%s?categories=100&purity=100&sorting=%s&order=desc&ratios=%s&atleast=%s&page=%d",
-		APIBase, sorting, ratio, atleast, page)
+func fetchPage(query, sorting, ratio, atleast, purity string, page int) ([]Wallpaper, int) {
+	url := fmt.Sprintf("%s?categories=100&purity=%s&sorting=%s&order=desc&ratios=%s&atleast=%s&page=%d",
+		APIBase, purity, sorting, ratio, atleast, page)
 
-	if APIKey != "" && APIKey != "$WALLHAVEN_API" {
-		url += "&apikey=" + APIKey
+	if apiKey := getWallhavenAPIKey(); apiKey != "" {
+		url += "&apikey=" + apiKey
 	}
 	if query != "" {
 		url += "&q=" + query
@@ -59,13 +88,16 @@ func fetchPage(query, sorting, ratio, atleast string, page int) ([]Wallpaper, in
 	if r.Meta != nil {
 		lastPage = r.Meta.LastPage
 	}
+	for i := range r.Data {
+		r.Data[i].Source = "wallhaven"
+	}
 	return r.Data, lastPage
 }
 
 func fetchTags(id string) []string {
 	url := "https://wallhaven.cc/api/v1/w/" + id
-	if APIKey != "" && APIKey != "$WALLHAVEN_API" {
-		url += "?apikey=" + APIKey
+	if apiKey := getWallhavenAPIKey(); apiKey != "" {
+		url += "?apikey=" + apiKey
 	}
 	resp, err := httpClient.Get(url)
 	if err != nil || resp.StatusCode != 200 {
@@ -91,12 +123,17 @@ func fetchTags(id string) []string {
 	return tags
 }
 
-func setWallpaper(path, monitor string) {
-	exec.Command("swww-daemon").Start()
-	time.Sleep(100 * time.Millisecond)
-	args := []string{"img", path, "--transition-type", "grow", "--transition-fps", "120", "--transition-duration", "1"}
-	if out, ok := MonitorOutputs[monitor]; ok {
-		args = append(args, "--outputs", out)
+func getWallhavenAPIKey() string {
+	envKey := strings.TrimSpace(os.Getenv("WALLHAVEN_API"))
+	if envKey != "" {
+		return envKey
 	}
-	exec.Command("swww", args...).Run()
+	if APIKey == "" || APIKey == "$WALLHAVEN_API" {
+		return ""
+	}
+	return APIKey
+}
+
+func purityNeedsAPIKey(purity string) bool {
+	return strings.Contains(purity, "1") && len(purity) >= 3 && purity[2] == '1'
 }

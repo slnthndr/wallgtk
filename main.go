@@ -9,7 +9,11 @@ import (
 
 func main() {
 	initDirs()
+	initLibraryDirs()
 	InitI18n() // Инициализируем локализацию
+	detectMonitorOutputs()
+	backendName = detectWallpaperBackend()
+	loadHistory()
 
 	// Отключаем Vulkan, чтобы NVIDIA-драйвер перестал спамить в консоль
 	os.Setenv("GSK_RENDERER", "gl")
@@ -34,6 +38,19 @@ func setupCSS() {
 		.loading { opacity: 0.45; }
 		flowboxchild { padding: 0; margin: 0; border: none; }
 		picture { border-radius: 8px; }
+		.floating-switcher {
+			background: transparent;
+			border: none;
+			padding: 0;
+			box-shadow: none;
+		}
+		.status-toast {
+			background: rgba(14, 14, 20, 0.82);
+			color: white;
+			border-radius: 999px;
+			padding: 6px 12px;
+			box-shadow: 0 8px 20px rgba(0, 0, 0, 0.24);
+		}
 
 		.zoom-bg { background-color: rgba(10, 10, 15, 0.95); }
 		.tags-overlay { background: rgba(0,0,0,0.7); border-radius: 12px; padding: 8px 14px; }

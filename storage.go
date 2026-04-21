@@ -10,6 +10,7 @@ import (
 func initDirs() {
 	home, _ := os.UserHomeDir()
 	cacheDir = filepath.Join(home, ".cache", "wallgtk")
+	historyFile = filepath.Join(cacheDir, "history.json")
 	wallpaperHor = filepath.Join(home, "Wallpapers", "backgrounds", "hor")
 	wallpaperVert = filepath.Join(home, "Wallpapers", "backgrounds", "vert")
 
@@ -108,6 +109,8 @@ func toggleFav(wp *Wallpaper) bool {
 			downloadOK := true
 			if strings.HasPrefix(wp.Path, "http") {
 				downloadOK = download(wp.Path, path)
+			} else if filepath.Clean(wp.Path) != filepath.Clean(path) {
+				downloadOK = copyFile(wp.Path, path)
 			}
 
 			favMutex.Lock()

@@ -16,15 +16,9 @@ func (a *App) CreateTile(wp Wallpaper, onFav func()) *gtk.Box {
 	tile.SetHAlign(gtk.AlignCenter)
 	tile.SetVAlign(gtk.AlignCenter)
 
-	monIdx := a.MonDD.Selected()
-	isPort := false
-
-	if monIdx == 2 {
-		isPort = true
-	} else if monIdx == 1 {
-		isPort = false
-	} else {
-		isPort = isPortrait(wp.Resolution)
+	isPort := isPortrait(wp.Resolution)
+	if a.currentMonitorFilter() != "mon_all" {
+		isPort = a.selectedMonitorIsPortrait()
 	}
 
 	tw, th := LandW, LandH
@@ -119,12 +113,12 @@ func (a *App) CreateTile(wp Wallpaper, onFav func()) *gtk.Box {
 	// Для загрузки из сети:
 	url := ""
 	if wp.Thumbs != nil {
-		url = wp.Thumbs.Original
+		url = wp.Thumbs.Small
 		if url == "" {
 			url = wp.Thumbs.Large
 		}
 		if url == "" {
-			url = wp.Thumbs.Small
+			url = wp.Thumbs.Original
 		}
 	} else if strings.HasPrefix(wp.Path, "http") && len(wp.ID) > 2 {
 		url = fmt.Sprintf("https://th.wallhaven.cc/small/%s/%s.jpg", wp.ID[:2], wp.ID)
@@ -156,38 +150,12 @@ func (a *App) CreateTile(wp Wallpaper, onFav func()) *gtk.Box {
 	click := gtk.NewGestureClick()
 	click.SetButton(1)
 	click.ConnectReleased(func(n int, x, y float64) {
-		mon := a.GetSelectedMonitor()
 		spinner.SetVisible(true)
 		spinner.Start()
 		picture.AddCSSClass("loading")
 
 		go func() {
-			finalPath := wpCopy.Path
-			// Качаем обоину в кеш, ТОЛЬКО ЕСЛИ она из сети
-			if strings.HasPrefix(finalPath, "http") {
-				p := filepath.Join(cacheDir, wpCopy.ID+".jpg")
-				if !download(wpCopy.Path, p) {
-					glib.IdleAdd(func() bool {
-						spinner.Stop()
-						spinner.SetVisible(false)
-						picture.RemoveCSSClass("loading")
-						return false
-					})
-					return
-				}
-				finalPath = p
-			} else if _, err := os.Stat(finalPath); err != nil {
-				glib.IdleAdd(func() bool {
-					spinner.Stop()
-					spinner.SetVisible(false)
-					picture.RemoveCSSClass("loading")
-					return false
-				})
-				return
-			}
-
-			// Вызываем Swww с локальным путем
-			setWallpaper(finalPath, mon)
+			a.HandleWallpaperSelection(wpCopy)
 
 			glib.IdleAdd(func() bool {
 				spinner.Stop()

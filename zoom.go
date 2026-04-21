@@ -58,7 +58,7 @@ func (a *App) BuildZoomOverlay() *gtk.Box {
 func (a *App) ShowZoom(wp Wallpaper, thumbPath string) {
 	a.CurrentPeekID = wp.ID
 	fmt.Printf("[\033[35mЗУМ\033[0m] Открываем ID: %s\n", wp.ID)
-	
+
 	a.PeekBox.SetVisible(true)
 	a.PeekTitleLbl.SetText(Tr("loading"))
 	for _, lbl := range a.PeekTagLbls {
@@ -70,6 +70,18 @@ func (a *App) ShowZoom(wp Wallpaper, thumbPath string) {
 	}
 
 	go func(id, path string) {
+		if !stringsHasHTTP(path) {
+			glib.IdleAdd(func() bool {
+				if a.CurrentPeekID == id {
+					if tex, err := gdk.NewTextureFromFilename(path); err == nil {
+						a.PeekPic.SetPaintable(tex)
+					}
+				}
+				return false
+			})
+			return
+		}
+
 		p := filepath.Join(cacheDir, id+".jpg")
 		if download(path, p) {
 			glib.IdleAdd(func() bool {
@@ -93,7 +105,9 @@ func (a *App) ShowZoom(wp Wallpaper, thumbPath string) {
 					a.PeekTagLbls[0].SetVisible(true)
 				} else {
 					for i, t := range tags {
-						if i >= 5 { break }
+						if i >= 5 {
+							break
+						}
 						a.PeekTagLbls[i].SetText("#" + t)
 						a.PeekTagLbls[i].SetVisible(true)
 					}
