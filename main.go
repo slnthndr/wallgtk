@@ -30,7 +30,7 @@ func main() {
 func setupCSS() {
 	css := `
 		.tile-l { min-width: 384px; min-height: 216px; }
-		.tile-p { min-width: 198px; min-height: 352px; }
+		.tile-p { min-width: 192px; min-height: 352px; }
 		.tile-clip { border-radius: 8px; background-color: rgba(30, 30, 40, 0.5); }
 		.heart-btn { background: rgba(20,20,30,0.65); color: #ff4d4d; border-radius: 50%; min-width: 34px; min-height: 34px; font-size: 18px; padding: 0; border: none; }
 		.heart-btn:hover { background: rgba(255,80,80,0.9); color: white; }

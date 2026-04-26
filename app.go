@@ -168,7 +168,7 @@ func (a *App) BuildUI() {
 	a.HistoryScroll = newScroll(a.HistoryFlow)
 
 	a.Stack = gtk.NewStack()
-	a.Stack.SetTransitionType(gtk.StackTransitionTypeSlideLeftRight)
+	a.Stack.SetTransitionType(gtk.StackTransitionTypeCrossfade)
 	a.Stack.AddTitled(a.BrowseScroll, "browse", Tr("tab_browse"))
 	a.Stack.AddTitled(a.FavScroll, "favs", Tr("tab_favs"))
 	a.Stack.AddTitled(a.HistoryScroll, "history", Tr("tab_history"))
@@ -321,6 +321,7 @@ func (a *App) SetupEvents() {
 			a.Reload()
 			return
 		}
+		a.invalidateVisibleLibraryView()
 		a.refreshVisibleLibraryView()
 	})
 }
@@ -408,8 +409,16 @@ func (a *App) LoadMore() {
 
 func (a *App) RefreshLibraryViews() {
 	a.favsLoaded = false
-	a.historyLoaded = false
 	a.refreshVisibleLibraryView()
+}
+
+func (a *App) invalidateVisibleLibraryView() {
+	switch a.Stack.VisibleChildName() {
+	case "favs":
+		a.favsLoaded = false
+	case "history":
+		a.historyLoaded = false
+	}
 }
 
 func (a *App) refreshVisibleLibraryView() {
@@ -435,7 +444,13 @@ func (a *App) currentMonitorFilter() string {
 }
 
 func (a *App) selectedMonitorIsPortrait() bool {
-	key := a.currentMonitorFilter()
+	return monitorPrefersPortrait(a.currentMonitorFilter())
+}
+
+func monitorPrefersPortrait(key string) bool {
+	if key == "mon_sec" {
+		return true
+	}
 	for _, entry := range MonitorEntries {
 		if entry.Key == key {
 			return entry.Portrait
@@ -462,6 +477,8 @@ func (a *App) selectMonitor(key string) {
 	a.RatioDD.SetSelected(0)
 	a.ResDD.SetSelected(0)
 	a.updateMonitorButtonLabel()
+	a.favsLoaded = false
+	a.historyLoaded = false
 	a.Reload()
 	a.refreshVisibleLibraryView()
 }
@@ -517,7 +534,6 @@ func (a *App) updateClearHistoryState() {
 }
 
 func (a *App) RefreshFavs() {
-	SyncFavorites()
 	clearFlow(a.FavFlow)
 	favMutex.RLock()
 	var items []Wallpaper
@@ -551,13 +567,7 @@ func filterByMonitor(items []Wallpaper, mon string) []Wallpaper {
 		return items
 	}
 	var filtered []Wallpaper
-	portrait := false
-	for _, entry := range MonitorEntries {
-		if entry.Key == mon {
-			portrait = entry.Portrait
-			break
-		}
-	}
+	portrait := monitorPrefersPortrait(mon)
 	for _, wp := range items {
 		if isPortrait(wp.Resolution) != portrait {
 			continue
@@ -660,7 +670,11 @@ func (a *App) applyResolvedWallpaper(targets map[string]Wallpaper, historyMonito
 			recordHistory(wp, historyMonitor)
 		}
 		glibv2.IdleAdd(func() bool {
-			a.RefreshHistory()
+			a.historyLoaded = false
+			if a.Stack.VisibleChildName() == "history" {
+				a.RefreshHistory()
+				a.historyLoaded = true
+			}
 			if historyMonitor == "pair" {
 				a.updateStatus(Tr("pair_applied"))
 			} else {

@@ -36,16 +36,17 @@ func SyncFavorites() {
 			}
 			ext := strings.ToLower(filepath.Ext(e.Name()))
 			if ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".webp" {
+				path := filepath.Join(dir, e.Name())
+				if wp, ok := localWallpaperFromPath(path, "favorites"); ok {
+					syncedFavorites[wp.ID] = wp
+					continue
+				}
 				id := strings.TrimSuffix(e.Name(), filepath.Ext(e.Name()))
 				res := "1920x1080"
 				if isPort {
 					res = "1080x1920"
 				}
-				syncedFavorites[id] = Wallpaper{
-					ID:         id,
-					Path:       filepath.Join(dir, e.Name()), // Локальный путь к файлу
-					Resolution: res,
-				}
+				syncedFavorites[id] = Wallpaper{ID: id, Path: path, Resolution: res}
 			}
 		}
 	}
@@ -84,7 +85,6 @@ func toggleFav(wp *Wallpaper) bool {
 		// Если было в избранном, удаляем локальный файл на диске
 		os.Remove(existing.Path)
 		os.Remove(existing.Path + ".tmp")
-		SyncFavorites()
 		return false
 	} else {
 		// Добавляем файл на диск в зависимости от пропорций
@@ -123,8 +123,11 @@ func toggleFav(wp *Wallpaper) bool {
 			if !downloadOK || !stillPending || current.Path != path {
 				os.Remove(path)
 				os.Remove(path + ".tmp")
+				favMutex.Lock()
+				delete(favorites, wp.ID)
+				delete(pendingFavs, wp.ID)
+				favMutex.Unlock()
 			}
-			SyncFavorites()
 		}()
 		return true
 	}

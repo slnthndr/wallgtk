@@ -18,7 +18,7 @@ func (a *App) CreateTile(wp Wallpaper, onFav func()) *gtk.Box {
 
 	isPort := isPortrait(wp.Resolution)
 	if a.currentMonitorFilter() != "mon_all" {
-		isPort = a.selectedMonitorIsPortrait()
+		isPort = monitorPrefersPortrait(a.currentMonitorFilter())
 	}
 
 	tw, th := LandW, LandH
@@ -42,11 +42,11 @@ func (a *App) CreateTile(wp Wallpaper, onFav func()) *gtk.Box {
 	overlay.SetChild(strut)
 
 	picture := gtk.NewPicture()
+	picture.SetSizeRequest(tw, th)
 	picture.SetContentFit(gtk.ContentFitCover)
 	picture.SetCanShrink(true)
 	picture.SetHAlign(gtk.AlignFill)
 	picture.SetVAlign(gtk.AlignFill)
-
 	overlay.AddOverlay(picture)
 
 	heart := gtk.NewButton()
