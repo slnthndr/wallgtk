@@ -33,6 +33,7 @@ type App struct {
 	RatioDD      *gtk.DropDown
 	ResDD        *gtk.DropDown
 	SortDD       *gtk.DropDown
+	PreviewDD    *gtk.DropDown
 	SearchEntry  *gtk.SearchEntry
 	LangBtn      *gtk.Button
 	ClearHistBtn *gtk.Button
@@ -119,8 +120,10 @@ func (a *App) BuildUI() {
 	a.ModeDD = gtk.NewDropDownFromStrings(a.getLocalizedList(ModeKeys))
 	a.PurityDD = gtk.NewDropDownFromStrings(a.getLocalizedList(PurityKeys))
 	a.SortDD = gtk.NewDropDownFromStrings(a.getLocalizedList(SortKeys))
+	a.PreviewDD = gtk.NewDropDownFromStrings(a.getLocalizedList(PreviewKeys))
 	a.ResDD = gtk.NewDropDownFromStrings(a.getLocalizedList(LandscapeResKeys))
 	a.RatioDD = gtk.NewDropDownFromStrings(a.getLocalizedList(LandscapeRatiosKeys))
+	a.PreviewDD.SetSelected(0)
 	a.ClearHistBtn = gtk.NewButtonWithLabel(Tr("clear_history"))
 	a.ClearHistBtn.ConnectClicked(func() {
 		clearHistory()
@@ -232,6 +235,7 @@ func (a *App) UpdateLanguageUI() {
 	updateDD(a.ModeDD, ModeKeys)
 	updateDD(a.PurityDD, PurityKeys)
 	updateDD(a.SortDD, SortKeys)
+	updateDD(a.PreviewDD, PreviewKeys)
 
 	if a.selectedMonitorIsPortrait() {
 		updateDD(a.RatioDD, PortraitRatiosKeys)
@@ -261,6 +265,7 @@ func (a *App) SetupEvents() {
 	lastRes := a.ResDD.Selected()
 	lastPurity := a.PurityDD.Selected()
 	lastSort := a.SortDD.Selected()
+	lastPreview := a.PreviewDD.Selected()
 	lastMode := a.ModeDD.Selected()
 	startupTicks := 0
 	lastVisible := ""
@@ -293,6 +298,15 @@ func (a *App) SetupEvents() {
 			lastSort = a.SortDD.Selected()
 			a.OverflowBtn.Popdown()
 			a.Reload()
+		}
+
+		if a.PreviewDD.Selected() != lastPreview {
+			lastPreview = a.PreviewDD.Selected()
+			a.OverflowBtn.Popdown()
+			a.RefreshLibraryViews()
+			if a.Stack.VisibleChildName() == "browse" {
+				a.Reload()
+			}
 		}
 
 		if a.ModeDD.Selected() != lastMode {
@@ -789,6 +803,7 @@ func (a *App) rebuildOverflowMenu() {
 		a.ResDD,
 		a.SortDD,
 		a.PurityDD,
+		a.PreviewDD,
 		a.LangBtn,
 	} {
 		a.OverflowBox.Append(widget)

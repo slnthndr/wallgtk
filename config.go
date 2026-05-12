@@ -16,7 +16,7 @@ const (
 	LandW = 384
 	LandH = 216
 	PortW = 192
-	PortH = 352
+	PortH = 288
 	Gap   = 4 // Минимальный зазор между плитками
 
 )
@@ -31,6 +31,7 @@ var (
 	ModeKeys      = []string{"mode_single", "mode_pair"}
 	PurityKeys    = []string{"purity_sfw", "purity_sketchy", "purity_nsfw", "purity_all"}
 	SortKeys      = []string{"sort_date", "sort_rel", "sort_rnd", "sort_view", "sort_fav", "sort_top"}
+	PreviewKeys   = []string{"preview_crop", "preview_fit", "preview_fill", "preview_center"}
 	SortOptions   = []string{"date_added", "relevance", "random", "views", "favorites", "toplist"}
 	PurityOptions = []string{"100", "010", "001", "111"}
 

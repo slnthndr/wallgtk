@@ -70,6 +70,10 @@ var dict = map[Language]map[string]string{
 		"no_candidates":         "Нет подходящих изображений для действия.",
 		"clear_history":         "Очистить историю",
 		"history_cleared":       "История очищена.",
+		"preview_crop":          "Превью: Crop",
+		"preview_fit":           "Превью: Fit",
+		"preview_fill":          "Превью: Fill",
+		"preview_center":        "Превью: Center",
 
 		// Мониторы
 		"mon_all":        "Все",
@@ -122,6 +126,10 @@ var dict = map[Language]map[string]string{
 		"no_candidates":         "No matching wallpapers available.",
 		"clear_history":         "Clear History",
 		"history_cleared":       "History cleared.",
+		"preview_crop":          "Preview: Crop",
+		"preview_fit":           "Preview: Fit",
+		"preview_fill":          "Preview: Fill",
+		"preview_center":        "Preview: Center",
 
 		// Monitors
 		"mon_all":        "All",

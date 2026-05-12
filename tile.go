@@ -43,7 +43,7 @@ func (a *App) CreateTile(wp Wallpaper, onFav func()) *gtk.Box {
 
 	picture := gtk.NewPicture()
 	picture.SetSizeRequest(tw, th)
-	picture.SetContentFit(gtk.ContentFitCover)
+	picture.SetContentFit(a.previewContentFit(isPort))
 	picture.SetCanShrink(true)
 	picture.SetHAlign(gtk.AlignFill)
 	picture.SetVAlign(gtk.AlignFill)
@@ -174,4 +174,21 @@ func (a *App) CreateTile(wp Wallpaper, onFav func()) *gtk.Box {
 	overlay.AddController(rclick)
 
 	return tile
+}
+
+func (a *App) previewContentFit(isPortraitTile bool) gtk.ContentFit {
+	if !isPortraitTile || a.PreviewDD == nil {
+		return gtk.ContentFitCover
+	}
+
+	switch a.PreviewDD.Selected() {
+	case 1:
+		return gtk.ContentFitContain
+	case 2:
+		return gtk.ContentFitFill
+	case 3:
+		return gtk.ContentFitScaleDown
+	default:
+		return gtk.ContentFitCover
+	}
 }
