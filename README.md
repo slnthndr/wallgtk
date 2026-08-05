@@ -1,7 +1,7 @@
 ## Installation
 
 ```
-git clone https://github.com/slnthndr/wallgtk.git
+git clone https://github.com/d754b/wallgtk.git
 cd wallgtk
 make install
 ```
