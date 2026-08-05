@@ -22,7 +22,6 @@ func commandExists(name string) bool {
 }
 
 func detectWallpaperBackend() string {
-	func detectWallpaperBackend() string {
 	if commandExists("awww") && commandExists("awww-daemon") {
 		return "awww"
 	}
@@ -30,7 +29,6 @@ func detectWallpaperBackend() string {
 		return "gnome"
 	}
 	return ""
-	}
 }
 
 func setWallpaper(path, monitor string) bool {
