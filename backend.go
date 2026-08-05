@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
-	"path/filepath"
 )
 
 type detectedMonitor struct {
@@ -62,7 +62,7 @@ func setWallpaperPair(paths map[string]string) bool {
 			}
 		}
 		return ok
-		case "gnome":
+	case "gnome":
 		var path string
 		for _, p := range paths {
 			path = p
