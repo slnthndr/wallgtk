@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"path/filepath"
 )
 
 type detectedMonitor struct {
@@ -21,10 +22,15 @@ func commandExists(name string) bool {
 }
 
 func detectWallpaperBackend() string {
+	func detectWallpaperBackend() string {
 	if commandExists("awww") && commandExists("awww-daemon") {
 		return "awww"
 	}
+	if commandExists("gsettings") {
+		return "gnome"
+	}
 	return ""
+	}
 }
 
 func setWallpaper(path, monitor string) bool {
@@ -58,6 +64,26 @@ func setWallpaperPair(paths map[string]string) bool {
 			}
 		}
 		return ok
+		case "gnome":
+		var path string
+		for _, p := range paths {
+			path = p
+			break
+		}
+		if path == "" {
+			return false
+		}
+		abs, err := filepath.Abs(path)
+		if err != nil {
+			return false
+		}
+		uri := "file://" + abs
+		if err := exec.Command("gsettings", "set", "org.gnome.desktop.background", "picture-uri", uri).Run(); err != nil {
+			return false
+		}
+		exec.Command("gsettings", "set", "org.gnome.desktop.background", "picture-uri-dark", uri).Run()
+		exec.Command("gsettings", "set", "org.gnome.desktop.background", "picture-options", "scaled").Run()
+		return true
 	default:
 		return false
 	}
