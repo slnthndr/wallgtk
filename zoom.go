@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"path/filepath"
 
 	"github.com/diamondburned/gotk4/pkg/gdk/v4"
@@ -57,43 +56,44 @@ func (a *App) BuildZoomOverlay() *gtk.Box {
 
 func (a *App) ShowZoom(wp Wallpaper, thumbPath string) {
 	a.CurrentPeekID = wp.ID
-	fmt.Printf("[\033[35mЗУМ\033[0m] Открываем ID: %s\n", wp.ID)
+	logf("[ZOOM] open %s", wp.ID)
 
+	a.PeekPic.SetPaintable(nil)
 	a.PeekBox.SetVisible(true)
 	a.PeekTitleLbl.SetText(Tr("loading"))
 	for _, lbl := range a.PeekTagLbls {
 		lbl.SetVisible(false)
 	}
 
-	if tex, err := gdk.NewTextureFromFilename(thumbPath); err == nil {
-		a.PeekPic.SetPaintable(tex)
+	id := wp.ID
+	showFull := func(path string) {
+		loadTextureAsync(path, func(tex *gdk.Texture) {
+			if a.CurrentPeekID == id {
+				a.PeekPic.SetPaintable(tex)
+			}
+		})
 	}
 
-	go func(id, path string) {
-		if !stringsHasHTTP(path) {
-			glib.IdleAdd(func() bool {
-				if a.CurrentPeekID == id {
-					if tex, err := gdk.NewTextureFromFilename(path); err == nil {
-						a.PeekPic.SetPaintable(tex)
-					}
-				}
-				return false
-			})
-			return
+	loadTextureAsync(thumbPath, func(tex *gdk.Texture) {
+		// Полноразмерная картинка могла успеть приехать раньше миниатюры.
+		if a.CurrentPeekID == id && a.PeekPic.Paintable() == nil {
+			a.PeekPic.SetPaintable(tex)
 		}
+	})
 
-		p := filepath.Join(cacheDir, id+".jpg")
-		if download(path, p) {
-			glib.IdleAdd(func() bool {
-				if a.CurrentPeekID == id {
-					if tex, err := gdk.NewTextureFromFilename(p); err == nil {
-						a.PeekPic.SetPaintable(tex)
-					}
-				}
-				return false
-			})
-		}
-	}(wp.ID, wp.Path)
+	if !stringsHasHTTP(wp.Path) {
+		showFull(wp.Path)
+	} else {
+		go func(path string) {
+			p := filepath.Join(cacheDir, id+".jpg")
+			if download(path, p) {
+				glib.IdleAdd(func() bool {
+					showFull(p)
+					return false
+				})
+			}
+		}(wp.Path)
+	}
 
 	go func(id string) {
 		tags := fetchTags(id)
@@ -120,7 +120,7 @@ func (a *App) ShowZoom(wp Wallpaper, thumbPath string) {
 
 func (a *App) HideZoom() {
 	if a.CurrentPeekID != "" {
-		fmt.Printf("[\033[35mЗУМ\033[0m] Закрыт\n")
+		logf("[ZOOM] close")
 	}
 	a.PeekBox.SetVisible(false)
 	a.CurrentPeekID = ""

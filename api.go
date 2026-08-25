@@ -2,80 +2,128 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
+	"net/http"
+	neturl "net/url"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 )
 
+const userAgent = "wallgtk (+https://github.com/d754b/wallgtk)"
+
+// download скачивает url в dest ровно один раз: параллельные вызовы для одного
+// и того же назначения ждут первую загрузку и получают её результат.
 func download(url, dest string) bool {
+	if fileExists(dest) {
+		return true
+	}
+
 	downloadMu.Lock()
 	if state, exists := activeDownloads[dest]; exists {
 		downloadMu.Unlock()
-		return <-state.done
+		<-state.done
+		return state.ok
 	}
-	state := &downloadState{done: make(chan bool, 1)}
+	state := &downloadState{done: make(chan struct{})}
 	activeDownloads[dest] = state
 	downloadMu.Unlock()
 
-	ok := downloadWithRetry(url, dest, 3)
+	state.ok = downloadWithRetry(url, dest, 3)
 
 	downloadMu.Lock()
 	delete(activeDownloads, dest)
 	downloadMu.Unlock()
-	state.done <- ok
 	close(state.done)
-	return ok
+	return state.ok
 }
 
 func downloadWithRetry(url, dest string, attempts int) bool {
-	if _, err := os.Stat(dest); err == nil {
+	if fileExists(dest) {
 		return true
 	}
-	for attempt := 0; attempt < attempts; attempt++ {
-		resp, err := httpClient.Get(url)
-		if err != nil || resp.StatusCode != 200 {
-			if resp != nil && resp.Body != nil {
-				resp.Body.Close()
-			}
-			continue
-		}
 
-		f, err := os.Create(dest + ".tmp")
-		if err != nil {
-			resp.Body.Close()
-			return false
+	downloadSem <- struct{}{}
+	defer func() { <-downloadSem }()
+
+	for attempt := 0; attempt < attempts; attempt++ {
+		if attempt > 0 {
+			time.Sleep(time.Duration(attempt) * 400 * time.Millisecond)
 		}
-		_, copyErr := io.Copy(f, resp.Body)
-		resp.Body.Close()
-		closeErr := f.Close()
-		if copyErr == nil && closeErr == nil && os.Rename(dest+".tmp", dest) == nil {
+		if fetchToFile(url, dest) {
 			return true
 		}
-		os.Remove(dest + ".tmp")
 	}
+	logf("[NETWORK] download failed after %d attempts: %s", attempts, url)
 	return false
 }
 
+func fetchToFile(url, dest string) bool {
+	resp, err := httpGet(url)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return false
+	}
+
+	tmp := dest + ".tmp"
+	f, err := os.Create(tmp)
+	if err != nil {
+		return false
+	}
+	_, copyErr := io.Copy(f, resp.Body)
+	closeErr := f.Close()
+	if copyErr != nil || closeErr != nil {
+		os.Remove(tmp)
+		return false
+	}
+	if os.Rename(tmp, dest) != nil {
+		os.Remove(tmp)
+		return false
+	}
+	return true
+}
+
+func httpGet(rawurl string) (*http.Response, error) {
+	req, err := http.NewRequest(http.MethodGet, rawurl, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", userAgent)
+	return httpClient.Do(req)
+}
+
 func fetchPage(query, sorting, ratio, atleast, purity string, page int) ([]Wallpaper, int) {
-	url := fmt.Sprintf("%s?categories=100&purity=%s&sorting=%s&order=desc&ratios=%s&atleast=%s&page=%d",
-		APIBase, purity, sorting, ratio, atleast, page)
-
-	if apiKey := getWallhavenAPIKey(); apiKey != "" {
-		url += "&apikey=" + apiKey
-	}
+	params := neturl.Values{}
+	params.Set("categories", "100")
+	params.Set("purity", purity)
+	params.Set("sorting", sorting)
+	params.Set("order", "desc")
+	params.Set("ratios", ratio)
+	params.Set("atleast", atleast)
+	params.Set("page", strconv.Itoa(page))
 	if query != "" {
-		url += "&q=" + query
+		params.Set("q", query)
+	}
+	if apiKey := getWallhavenAPIKey(); apiKey != "" {
+		params.Set("apikey", apiKey)
 	}
 
-	fmt.Println("[NETWORK] Searching:", url)
-	resp, err := httpClient.Get(url)
+	// Ключ в лог не попадает намеренно.
+	logf("[NETWORK] search page=%d q=%q sort=%s ratio=%s atleast=%s purity=%s",
+		page, query, sorting, ratio, atleast, purity)
+
+	resp, err := httpGet(APIBase + "?" + params.Encode())
 	if err != nil {
 		return nil, 0
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
+		logf("[NETWORK] search returned %s", resp.Status)
 		return nil, 0
 	}
 
@@ -95,15 +143,18 @@ func fetchPage(query, sorting, ratio, atleast, purity string, page int) ([]Wallp
 }
 
 func fetchTags(id string) []string {
-	url := "https://wallhaven.cc/api/v1/w/" + id
+	rawurl := "https://wallhaven.cc/api/v1/w/" + neturl.PathEscape(id)
 	if apiKey := getWallhavenAPIKey(); apiKey != "" {
-		url += "?apikey=" + apiKey
+		rawurl += "?apikey=" + neturl.QueryEscape(apiKey)
 	}
-	resp, err := httpClient.Get(url)
-	if err != nil || resp.StatusCode != 200 {
+	resp, err := httpGet(rawurl)
+	if err != nil {
 		return nil
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil
+	}
 
 	var r struct {
 		Data struct {
@@ -134,6 +185,8 @@ func getWallhavenAPIKey() string {
 	return APIKey
 }
 
+// purityNeedsAPIKey сообщает, требует ли выбранный фильтр NSFW-доступа,
+// который Wallhaven отдаёт только по API-ключу.
 func purityNeedsAPIKey(purity string) bool {
-	return strings.Contains(purity, "1") && len(purity) >= 3 && purity[2] == '1'
+	return len(purity) >= 3 && purity[2] == '1'
 }

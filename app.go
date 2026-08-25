@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"time"
 
 	"github.com/diamondburned/gotk4/pkg/gdk/v4"
 	"github.com/diamondburned/gotk4/pkg/gio/v2"
@@ -63,6 +62,11 @@ type App struct {
 	favsLoaded       bool
 	historyLoaded    bool
 	statusSeq        int
+
+	// Gen растёт при каждом Reload; ответы старых запросов отбрасываются.
+	Gen int
+	// suspend > 0 — программная перестройка виджетов, сигналы игнорируем.
+	suspend int
 }
 
 func NewApp(app *gtk.Application) *App {
@@ -227,9 +231,11 @@ func (a *App) UpdateLanguageUI() {
 	updatePageTitle(a.HistoryScroll, Tr("tab_history"))
 
 	updateDD := func(dd *gtk.DropDown, keys []string) {
-		idx := dd.Selected()
-		dd.SetModel(gtk.NewStringList(a.getLocalizedList(keys)))
-		dd.SetSelected(idx)
+		a.withSuspendedSignals(func() {
+			idx := dd.Selected()
+			dd.SetModel(gtk.NewStringList(a.getLocalizedList(keys)))
+			dd.SetSelected(idx)
+		})
 	}
 
 	updateDD(a.ModeDD, ModeKeys)
@@ -261,74 +267,19 @@ func (a *App) configureFlowBox(flow *gtk.FlowBox) {
 }
 
 func (a *App) SetupEvents() {
-	lastRatio := a.RatioDD.Selected()
-	lastRes := a.ResDD.Selected()
-	lastPurity := a.PurityDD.Selected()
-	lastSort := a.SortDD.Selected()
-	lastPreview := a.PreviewDD.Selected()
-	lastMode := a.ModeDD.Selected()
-	startupTicks := 0
-	lastVisible := ""
+	for _, dd := range []*gtk.DropDown{a.RatioDD, a.ResDD, a.PurityDD, a.SortDD} {
+		dd.NotifyProperty("selected", a.onSearchFilterChanged)
+	}
+	a.PreviewDD.NotifyProperty("selected", a.onPreviewChanged)
+	a.ModeDD.NotifyProperty("selected", a.onModeChanged)
+	a.Stack.NotifyProperty("visible-child-name", a.onVisibleChildChanged)
 
-	glibv2.TimeoutAdd(120, func() bool {
-		startupTicks++
-		if startupTicks%5 == 0 {
-			a.Lock.Lock()
-			canLoad := !a.Loading && a.Page <= a.LastPage
-			a.Lock.Unlock()
-
-			if canLoad && a.Stack.VisibleChildName() == "browse" {
-				vadj := a.BrowseScroll.VAdjustment()
-				upper := vadj.Upper()
-				pageSize := vadj.PageSize()
-				value := vadj.Value()
-
-				if a.BrowseFlow.FirstChild() == nil ||
-					(upper > 0 && pageSize > 0 && upper <= pageSize+1200) ||
-					(upper > 0 && (value+pageSize) >= (upper-800)) {
-					a.LoadMore()
-				}
-			}
-		}
-
-		if a.RatioDD.Selected() != lastRatio || a.ResDD.Selected() != lastRes || a.PurityDD.Selected() != lastPurity || a.SortDD.Selected() != lastSort {
-			lastRatio = a.RatioDD.Selected()
-			lastRes = a.ResDD.Selected()
-			lastPurity = a.PurityDD.Selected()
-			lastSort = a.SortDD.Selected()
-			a.OverflowBtn.Popdown()
-			a.Reload()
-		}
-
-		if a.PreviewDD.Selected() != lastPreview {
-			lastPreview = a.PreviewDD.Selected()
-			a.OverflowBtn.Popdown()
-			a.RefreshLibraryViews()
-			if a.Stack.VisibleChildName() == "browse" {
-				a.Reload()
-			}
-		}
-
-		if a.ModeDD.Selected() != lastMode {
-			lastMode = a.ModeDD.Selected()
-			a.PairingSelection = nil
-			if lastMode == 1 {
-				a.updateStatus(Tr("pair_mode_wait_first"))
-			} else {
-				a.updateStatus(Tr("drop_hint"))
-			}
-		}
-
-		visible := a.Stack.VisibleChildName()
-		if visible != lastVisible {
-			lastVisible = visible
-			a.refreshVisibleLibraryView()
-			a.updateClearHistoryState()
-			a.rebuildOverflowMenu()
-		}
-
-		return true
-	})
+	// Подгрузка следующей страницы: по прокрутке и по изменению геометрии
+	// содержимого (первое заполнение окна, ресайз).
+	vadj := a.BrowseScroll.VAdjustment()
+	vadj.ConnectValueChanged(a.maybeLoadMore)
+	vadj.NotifyProperty("upper", a.maybeLoadMore)
+	vadj.NotifyProperty("page-size", a.maybeLoadMore)
 
 	a.SearchEntry.ConnectActivate(func() {
 		if a.Stack.VisibleChildName() == "browse" {
@@ -340,10 +291,81 @@ func (a *App) SetupEvents() {
 	})
 }
 
+// withSuspendedSignals выполняет перестройку виджетов, не вызывая обработчики:
+// смена модели у DropDown сбрасывает selected и иначе провоцировала бы Reload.
+func (a *App) withSuspendedSignals(fn func()) {
+	a.suspend++
+	defer func() { a.suspend-- }()
+	fn()
+}
+
+func (a *App) signalsSuspended() bool { return a.suspend > 0 }
+
+func (a *App) onSearchFilterChanged() {
+	if a.signalsSuspended() {
+		return
+	}
+	a.OverflowBtn.Popdown()
+	a.Reload()
+}
+
+func (a *App) onPreviewChanged() {
+	if a.signalsSuspended() {
+		return
+	}
+	a.OverflowBtn.Popdown()
+	a.RefreshLibraryViews()
+	if a.Stack.VisibleChildName() == "browse" {
+		a.Reload()
+	}
+}
+
+func (a *App) onModeChanged() {
+	if a.signalsSuspended() {
+		return
+	}
+	a.PairingSelection = nil
+	if a.ModeDD.Selected() == 1 {
+		a.updateStatus(Tr("pair_mode_wait_first"))
+	} else {
+		a.updateStatus(Tr("drop_hint"))
+	}
+}
+
+func (a *App) onVisibleChildChanged() {
+	a.refreshVisibleLibraryView()
+	a.updateClearHistoryState()
+	a.rebuildOverflowMenu()
+	a.maybeLoadMore()
+}
+
+func (a *App) maybeLoadMore() {
+	if a.Stack == nil || a.Stack.VisibleChildName() != "browse" {
+		return
+	}
+
+	a.Lock.Lock()
+	canLoad := !a.Loading && a.Page <= a.LastPage
+	a.Lock.Unlock()
+	if !canLoad {
+		return
+	}
+
+	vadj := a.BrowseScroll.VAdjustment()
+	upper, pageSize, value := vadj.Upper(), vadj.PageSize(), vadj.Value()
+
+	if a.BrowseFlow.FirstChild() == nil ||
+		(upper > 0 && pageSize > 0 && upper <= pageSize+1200) ||
+		(upper > 0 && (value+pageSize) >= (upper-800)) {
+		a.LoadMore()
+	}
+}
+
 func (a *App) Reload() {
 	clearFlow(a.BrowseFlow)
 
 	a.Lock.Lock()
+	a.Gen++
 	a.Page = 1
 	a.LastPage = 999
 	a.Loading = false
@@ -398,6 +420,7 @@ func (a *App) LoadMore() {
 		return
 	}
 	a.Loading = true
+	gen := a.Gen
 	p, q, s, r, res, purity := a.Page, a.Query, a.Sorting, a.ReqRatio, a.ReqRes, a.ReqPurity
 	a.Lock.Unlock()
 
@@ -405,17 +428,39 @@ func (a *App) LoadMore() {
 		data, lp := fetchPage(q, s, r, res, purity, p)
 		glibv2.IdleAdd(func() bool {
 			a.Lock.Lock()
+			// Пока запрос летел, фильтры могли смениться — такой ответ не наш.
+			if gen != a.Gen {
+				a.Lock.Unlock()
+				return false
+			}
+
 			a.LastPage = lp
+			appended := 0
+			var tiles []*gtk.Box
 			for _, wp := range data {
-				if !a.Seen[wp.ID] {
-					a.Seen[wp.ID] = true
-					tile := a.CreateTile(wp, a.RefreshLibraryViews)
-					a.BrowseFlow.Append(tile)
+				if a.Seen[wp.ID] {
+					continue
 				}
+				a.Seen[wp.ID] = true
+				tiles = append(tiles, a.CreateTile(wp, a.RefreshLibraryViews))
+				appended++
 			}
 			a.Page++
 			a.Loading = false
 			a.Lock.Unlock()
+
+			for _, tile := range tiles {
+				a.BrowseFlow.Append(tile)
+			}
+
+			// Экран мог остаться незаполненным — проверим ещё раз, когда GTK
+			// пересчитает раскладку. Пустая страница обрывает цепочку.
+			if appended > 0 {
+				glibv2.TimeoutAdd(60, func() bool {
+					a.maybeLoadMore()
+					return false
+				})
+			}
 			return false
 		})
 	}()
@@ -462,9 +507,6 @@ func (a *App) selectedMonitorIsPortrait() bool {
 }
 
 func monitorPrefersPortrait(key string) bool {
-	if key == "mon_sec" {
-		return true
-	}
 	for _, entry := range MonitorEntries {
 		if entry.Key == key {
 			return entry.Portrait
@@ -481,15 +523,17 @@ func (a *App) selectMonitor(key string) {
 		return
 	}
 	a.SelectedMon = key
-	if a.selectedMonitorIsPortrait() {
-		a.RatioDD.SetModel(gtk.NewStringList(a.getLocalizedList(PortraitRatiosKeys)))
-		a.ResDD.SetModel(gtk.NewStringList(a.getLocalizedList(PortraitResKeys)))
-	} else {
-		a.RatioDD.SetModel(gtk.NewStringList(a.getLocalizedList(LandscapeRatiosKeys)))
-		a.ResDD.SetModel(gtk.NewStringList(a.getLocalizedList(LandscapeResKeys)))
-	}
-	a.RatioDD.SetSelected(0)
-	a.ResDD.SetSelected(0)
+	a.withSuspendedSignals(func() {
+		if a.selectedMonitorIsPortrait() {
+			a.RatioDD.SetModel(gtk.NewStringList(a.getLocalizedList(PortraitRatiosKeys)))
+			a.ResDD.SetModel(gtk.NewStringList(a.getLocalizedList(PortraitResKeys)))
+		} else {
+			a.RatioDD.SetModel(gtk.NewStringList(a.getLocalizedList(LandscapeRatiosKeys)))
+			a.ResDD.SetModel(gtk.NewStringList(a.getLocalizedList(LandscapeResKeys)))
+		}
+		a.RatioDD.SetSelected(0)
+		a.ResDD.SetSelected(0)
+	})
 	a.updateMonitorButtonLabel()
 	a.favsLoaded = false
 	a.historyLoaded = false
@@ -748,20 +792,17 @@ func (a *App) updateStatus(text string) {
 	if text == "" {
 		return
 	}
-	go func() {
-		time.Sleep(5 * time.Second)
-		glibv2.IdleAdd(func() bool {
-			if a.statusSeq == seq {
-				a.StatusLbl.SetText("")
-				a.StatusLbl.SetVisible(false)
-			}
-			return false
-		})
-	}()
+	glibv2.TimeoutAdd(5000, func() bool {
+		if a.statusSeq == seq {
+			a.StatusLbl.SetText("")
+			a.StatusLbl.SetVisible(false)
+		}
+		return false
+	})
 }
 
 func (a *App) Show() {
-	a.Win.Show()
+	a.Win.SetVisible(true)
 	a.updateClearHistoryState()
 	glibv2.IdleAdd(func() bool {
 		a.Reload()

@@ -2,9 +2,7 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/diamondburned/gotk4/pkg/gdk/v4"
 	"github.com/diamondburned/gotk4/pkg/glib/v2"
@@ -66,7 +64,7 @@ func (a *App) CreateTile(wp Wallpaper, onFav func()) *gtk.Box {
 	}
 	overlay.AddOverlay(heart)
 
-	if wp.Resolution != "" && !strings.HasPrefix(wp.Path, "/home") {
+	if wp.Resolution != "" && stringsHasHTTP(wp.Path) {
 		lbl := gtk.NewLabel(wp.Resolution)
 		lbl.AddCSSClass("res-label")
 		lbl.SetHAlign(gtk.AlignStart)
@@ -91,23 +89,23 @@ func (a *App) CreateTile(wp Wallpaper, onFav func()) *gtk.Box {
 	}
 	thumbPath := filepath.Join(cacheDir, wp.ID+suffix)
 
+	// Распаковка идёт в фоне, главный поток только ставит готовую текстуру.
 	loadThumb := func(path string) {
-		if _, err := os.Stat(path); err == nil {
-			if tex, err := gdk.NewTextureFromFilename(path); err == nil {
-				picture.SetPaintable(tex)
-			}
+		if !fileExists(path) {
+			return
 		}
+		loadTextureAsync(path, func(tex *gdk.Texture) {
+			picture.SetPaintable(tex)
+		})
 	}
 
 	// 1. Пытаемся грузить кэш из сети
-	if _, err := os.Stat(thumbPath); err == nil {
+	if fileExists(thumbPath) {
 		loadThumb(thumbPath)
-	} else {
+	} else if !stringsHasHTTP(wp.Path) {
 		// 2. Если кэша нет, но wp.Path указывает на локальный файл на диске,
 		// то используем сам файл как миниатюру
-		if !strings.HasPrefix(wp.Path, "http") {
-			loadThumb(wp.Path)
-		}
+		loadThumb(wp.Path)
 	}
 
 	// Для загрузки из сети:
@@ -120,7 +118,7 @@ func (a *App) CreateTile(wp Wallpaper, onFav func()) *gtk.Box {
 		if url == "" {
 			url = wp.Thumbs.Original
 		}
-	} else if strings.HasPrefix(wp.Path, "http") && len(wp.ID) > 2 {
+	} else if stringsHasHTTP(wp.Path) && len(wp.ID) > 2 {
 		url = fmt.Sprintf("https://th.wallhaven.cc/small/%s/%s.jpg", wp.ID[:2], wp.ID)
 	}
 

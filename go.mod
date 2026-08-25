@@ -1,6 +1,6 @@
 module wallgtk
 
-go 1.26.1
+go 1.25.0
 
 require github.com/diamondburned/gotk4/pkg v0.3.1
 
