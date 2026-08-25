@@ -86,19 +86,60 @@ func setWallpaperPair(paths map[string]string) bool {
 	if len(targets) == 0 {
 		return false
 	}
-	// Бэкенды без поддержки отдельных выходов ставят один фон на всё;
-	// берём первую цель в стабильном порядке, а не случайную.
-	if !activeBackend.PerOutput && len(targets) > 1 {
-		logf("[BACKEND] %s cannot address monitors separately, applying %s only",
-			activeBackend.Name, targets[0].Key)
-		targets = targets[:1]
+
+	for _, backend := range candidateBackends(targets) {
+		use := targets
+		// Бэкенды без поддержки отдельных выходов ставят один фон на всё;
+		// берём первую цель в стабильном порядке, а не случайную.
+		if !backend.PerOutput && len(use) > 1 {
+			logf("[BACKEND] %s cannot address monitors separately, applying %s only",
+				backend.Name, use[0].Key)
+			use = use[:1]
+		}
+		if err := backend.Apply(use); err != nil {
+			logf("[BACKEND] %s failed: %v", backend.Name, err)
+			continue
+		}
+		if backend != activeBackend {
+			logf("[BACKEND] applied via fallback %s", backend.Name)
+		}
+		return true
+	}
+	return false
+}
+
+// candidateBackends перечисляет бэкенды для конкретного запроса в порядке
+// предпочтения: активный первым, остальные подошедшие — следом, как запасные
+// на случай ошибки. Единственное исключение — запрос на разные обои по
+// мониторам, когда активный бэкенд раздельные выходы не умеет: тогда вперёд
+// выходит первый умеющий, иначе часть мониторов молча осталась бы без обоев.
+// Так omarchy остаётся основным, а swww/awww подхватывает и per-output, и сбои.
+func candidateBackends(targets []wallpaperTarget) []*wallpaperBackend {
+	var ordered []*wallpaperBackend
+	add := func(b *wallpaperBackend) {
+		for _, seen := range ordered {
+			if seen == b {
+				return
+			}
+		}
+		ordered = append(ordered, b)
 	}
 
-	if err := activeBackend.Apply(targets); err != nil {
-		logf("[BACKEND] %s failed: %v", activeBackend.Name, err)
-		return false
+	if len(targets) > 1 && !activeBackend.PerOutput {
+		for _, b := range wallpaperBackends {
+			if b.PerOutput && b.Detect() {
+				add(b)
+				break
+			}
+		}
 	}
-	return true
+	add(activeBackend)
+	for _, b := range wallpaperBackends {
+		if b.Detect() {
+			add(b)
+		}
+	}
+	return ordered
 }
 
 func buildTargets(paths map[string]string) []wallpaperTarget {

@@ -32,6 +32,7 @@ type wallpaperBackend struct {
 // Порядок важен: побеждает первый подошедший. Сверху — точные, привязанные к
 // конкретному композитору/DE; снизу — универсальные запасные варианты.
 var wallpaperBackends = []*wallpaperBackend{
+	{Name: "omarchy", Detect: detectOmarchy, Apply: applyOmarchy},
 	{Name: "swww", PerOutput: true, Detect: detectSwww, Apply: applySwww},
 	{Name: "hyprpaper", PerOutput: true, Detect: detectHyprpaper, Apply: applyHyprpaper},
 	{Name: "sway", PerOutput: true, Detect: detectSway, Apply: applySway},
@@ -143,6 +144,50 @@ func gsettingsSchemaExists(schema string) bool {
 }
 
 // --- swww / awww ----------------------------------------------------------
+
+// Omarchy хранит текущие обои в состоянии темы: omarchy-theme-bg-set
+// переставляет симлинк ~/.local/state/omarchy/current/background и просит шелл
+// перерисоваться. Всё остальное в системе — переключатель тем, шелл,
+// `omarchy theme bg current` — читает этот симлинк, поэтому обои, поставленные
+// мимо него, для Omarchy как будто и не менялись. Отсюда первое место в списке.
+//
+// Отдельные выходы Omarchy выразить не умеет (фон один на весь рабочий стол),
+// так что PerOutput у него нет, и запрос на конкретный монитор уходит ниже —
+// к swww/awww.
+func detectOmarchy() bool {
+	// omarchy-shell рисует фон: без него мы бы меняли состояние, которое
+	// некому отрисовать.
+	return commandExists("omarchy-theme-bg-set") && commandExists("omarchy-shell") && isWayland()
+}
+
+func applyOmarchy(targets []wallpaperTarget) error {
+	if len(targets) == 0 {
+		return fmt.Errorf("omarchy: no targets")
+	}
+	path := targets[0].Path
+	if err := run("omarchy-theme-bg-set", path); err != nil {
+		return err
+	}
+
+	// Проверяем по симлинку, а не по коду возврата: IPC-половина сеттера может
+	// отвалиться сама по себе, а симлинк шелл опрашивает в любом случае.
+	// Разрешаем обе стороны — сеттер сохраняет realpath(), а каталоги с обоями
+	// сами нередко лежат за симлинком (репозиторий с дотфайлами, например),
+	// и сравнение с неразрешённым путём не совпало бы никогда.
+	want, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return nil
+	}
+	link := filepath.Join(os.Getenv("HOME"), ".local/state/omarchy/current/background")
+	got, err := filepath.EvalSymlinks(link)
+	if err != nil {
+		return fmt.Errorf("omarchy: cannot read %s: %w", link, err)
+	}
+	if got != want {
+		return fmt.Errorf("omarchy: background is %q, expected %q", got, want)
+	}
+	return nil
+}
 
 func detectSwww() bool {
 	if _, _, ok := swwwBinaries(); !ok {
