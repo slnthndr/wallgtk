@@ -85,6 +85,7 @@ func toggleFav(wp *Wallpaper) bool {
 		// Если было в избранном, удаляем локальный файл на диске
 		os.Remove(existing.Path)
 		os.Remove(existing.Path + ".tmp")
+		dropTexture(existing.Path)
 		return false
 	} else {
 		// Добавляем файл на диск в зависимости от пропорций
@@ -123,6 +124,7 @@ func toggleFav(wp *Wallpaper) bool {
 			if !downloadOK || !stillPending || current.Path != path {
 				os.Remove(path)
 				os.Remove(path + ".tmp")
+				dropTexture(path)
 				favMutex.Lock()
 				delete(favorites, wp.ID)
 				delete(pendingFavs, wp.ID)

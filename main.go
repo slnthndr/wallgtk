@@ -1,19 +1,33 @@
 package main
 
 import (
+	"flag"
+	"fmt"
 	"os"
+	"strings"
 
 	"github.com/diamondburned/gotk4/pkg/gdk/v4"
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 )
 
 func main() {
+	listBackends := flag.Bool("list-backends", false, "показать подходящие бэкенды обоев и выйти")
+	flag.BoolVar(&verbose, "v", verbose, "подробный лог в stderr")
+	flag.StringVar(&backendOverride, "backend", "", "принудительно выбрать бэкенд обоев (см. -list-backends)")
+	flag.Parse()
+
 	initDirs()
 	initLibraryDirs()
 	InitI18n() // Инициализируем локализацию
 	detectMonitorOutputs()
 	backendName = detectWallpaperBackend()
+
+	if *listBackends {
+		printBackends()
+		return
+	}
 	loadHistory()
+	go pruneCache()
 
 	// Отключаем Vulkan, чтобы NVIDIA-драйвер перестал спамить в консоль
 	os.Setenv("GSK_RENDERER", "gl")
@@ -24,7 +38,8 @@ func main() {
 		wallApp := NewApp(app)
 		wallApp.Show()
 	})
-	app.Run(os.Args)
+	// Аргументы уже разобраны flag; GTK передаём только имя программы.
+	app.Run(os.Args[:1])
 }
 
 func setupCSS() {
@@ -64,4 +79,30 @@ func setupCSS() {
 		provider,
 		gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
 	)
+}
+
+func printBackends() {
+	if backendName == "" {
+		fmt.Println("Активный бэкенд: не выбран — обои применить не получится.")
+	} else {
+		fmt.Println("Активный бэкенд: " + backendName)
+	}
+
+	available := availableBackends()
+	if len(available) == 0 {
+		fmt.Println("Автоопределение: ничего подходящего не найдено.")
+	} else {
+		fmt.Println("Автоопределение (в порядке приоритета): " + strings.Join(available, ", "))
+	}
+	fmt.Println()
+	fmt.Println("Все поддерживаемые:")
+	for _, b := range wallpaperBackends {
+		perOutput := "один фон на все мониторы"
+		if b.PerOutput {
+			perOutput = "разные обои по мониторам"
+		}
+		fmt.Printf("  %-12s %s\n", b.Name, perOutput)
+	}
+	fmt.Println()
+	fmt.Println("Выбрать вручную: wallgtk -backend <имя> или WALLGTK_BACKEND=<имя>")
 }

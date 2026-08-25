@@ -7,10 +7,8 @@ import (
 )
 
 const (
-	APIKey          = "" //get your apiKey on https://wallhaven.cc/settings/account
-	APIBase         = "https://wallhaven.cc/api/v1/search"
-	TileSpacing     = 8
-	ScrollThreshold = 600
+	APIKey  = "" //get your apiKey on https://wallhaven.cc/settings/account
+	APIBase = "https://wallhaven.cc/api/v1/search"
 
 	// Жесткие размеры
 	LandW = 384
@@ -19,6 +17,12 @@ const (
 	PortH = 288
 	Gap   = 4 // Минимальный зазор между плитками
 
+	// Сколько загрузок разрешено выполнять одновременно.
+	maxParallelDownloads = 6
+	// Верхняя граница размера кэша картинок, байт.
+	cacheSizeLimit = 512 << 20
+	// Сколько распакованных текстур держим в памяти.
+	textureCacheLimit = 192
 )
 
 type MonitorEntry struct {
@@ -48,26 +52,35 @@ var (
 	MonitorOutputs = map[string]string{}
 	MonitorEntries = []MonitorEntry{{Key: "mon_all"}}
 
-	cacheDir      string
-	favFile       string
-	historyFile   string
-	libraryHor    string
-	libraryVert   string
-	wallpaperHor  string
-	wallpaperVert string
-	favorites     = make(map[string]Wallpaper)
-	pendingFavs   = make(map[string]Wallpaper)
-	historyItems  []HistoryEntry
-	historyMu     sync.RWMutex
-	favMutex      sync.RWMutex
-	httpClient    = &http.Client{Timeout: 30 * time.Second}
-	backendName   string
+	cacheDir        string
+	historyFile     string
+	libraryHor      string
+	libraryVert     string
+	wallpaperHor    string
+	wallpaperVert   string
+	favorites       = make(map[string]Wallpaper)
+	pendingFavs     = make(map[string]Wallpaper)
+	historyItems    []HistoryEntry
+	historyMu       sync.RWMutex
+	favMutex        sync.RWMutex
+	backendName     string
+	backendOverride string
 
-	downloadMu       sync.Mutex
-	activeDownloads  = make(map[string]*downloadState)
-	lastLocalRefresh time.Time
+	httpClient = &http.Client{
+		Timeout: 30 * time.Second,
+		Transport: &http.Transport{
+			MaxIdleConns:        32,
+			MaxIdleConnsPerHost: maxParallelDownloads,
+			IdleConnTimeout:     90 * time.Second,
+		},
+	}
+
+	downloadMu      sync.Mutex
+	activeDownloads = make(map[string]*downloadState)
+	downloadSem     = make(chan struct{}, maxParallelDownloads)
 )
 
 type downloadState struct {
-	done chan bool
+	done chan struct{}
+	ok   bool
 }

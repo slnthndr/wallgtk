@@ -32,7 +32,12 @@ func saveHistory() {
 	if err != nil {
 		return
 	}
-	os.WriteFile(historyFile, data, 0644)
+	if historyFile == "" {
+		return
+	}
+	if err := writeFileAtomic(historyFile, data, 0644); err != nil {
+		logf("[HISTORY] save failed: %v", err)
+	}
 }
 
 func recordHistory(wp Wallpaper, monitor string) {

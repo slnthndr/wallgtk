@@ -34,7 +34,7 @@ func ToggleLang() {
 	} else {
 		CurrentLang = LangRU
 	}
-	os.WriteFile(langFile, []byte(CurrentLang), 0644)
+	writeFileAtomic(langFile, []byte(CurrentLang), 0644)
 }
 
 func Tr(key string) string {
@@ -60,7 +60,7 @@ var dict = map[Language]map[string]string{
 		"drop_invalid":          "Не удалось импортировать перетаскиваемые файлы.",
 		"download_failed":       "Не удалось скачать изображение.",
 		"local_missing":         "Локальный файл не найден.",
-		"backend_missing":       "Не найден поддерживаемый backend обоев.",
+		"backend_missing":       "Не удалось применить обои: нет подходящего backend'а. Запустите `wallgtk -list-backends`.",
 		"nsfw_requires_api":     "NSFW через Wallhaven API требует ключ. Укажите `WALLHAVEN_API` или `APIKey` в config.go.",
 		"nsfw_all_requires_api": "Фильтр \"Все\" переключён на SFW+Sketchy: NSFW через API требует ключ.",
 		"wallpaper_applied":     "Обои применены.",
@@ -116,7 +116,7 @@ var dict = map[Language]map[string]string{
 		"drop_invalid":          "Failed to import dropped files.",
 		"download_failed":       "Failed to download the image.",
 		"local_missing":         "Local file is missing.",
-		"backend_missing":       "No supported wallpaper backend was detected.",
+		"backend_missing":       "Could not apply the wallpaper: no usable backend. Run `wallgtk -list-backends`.",
 		"nsfw_requires_api":     "NSFW via the Wallhaven API requires an API key. Set `WALLHAVEN_API` or `APIKey` in config.go.",
 		"nsfw_all_requires_api": "The \"All\" filter was downgraded to SFW+Sketchy: NSFW via the API requires a key.",
 		"wallpaper_applied":     "Wallpaper applied.",
